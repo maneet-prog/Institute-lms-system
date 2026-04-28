@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+yarn.lock
+.venv/
+
+backend/node_modules/
+backend/yarn.lock
+backend/.env
+
+frontend/node_modules/
+frontend/yarn.lock
+frontend/.env.local
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.next/
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+dist/
+build/
+.next/
+*.log
+
+# Database
+*.db
+*.sqlite
+
+# Temporary files
+tmp/
+temp/
+__pycache__/
+*.pyc
+*.pyo
+*.tsbuildinfo
