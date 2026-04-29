@@ -197,6 +197,50 @@ export interface StudentModuleBundle {
   content: Content[];
 }
 
+export interface StudentDashboardOverview {
+  batch_count: number;
+  module_count: number;
+  completed_module_count: number;
+  pending_module_count: number;
+  average_progress_percent: number;
+}
+
+export interface StudentDashboardBatch extends StudentBatchInfo {
+  module_count: number;
+  completed_module_count: number;
+  average_progress_percent: number;
+}
+
+export interface StudentDashboardModule {
+  module_id: string;
+  module_name: string;
+  batch_id: string;
+  batch_name: string;
+  course_id: string;
+  course_name: string;
+  subcourse_id: string;
+  subcourse_name: string;
+  content_count: number;
+  total_duration_minutes: number;
+  next_content_title?: string | null;
+  completed: boolean;
+  progress_percent: number;
+  last_accessed?: string | null;
+}
+
+export interface StudentDashboardData {
+  student: {
+    user_id: string;
+    institute_id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
+  overview: StudentDashboardOverview;
+  batches: StudentDashboardBatch[];
+  modules: StudentDashboardModule[];
+}
+
 export interface UserProgress {
   id: string;
   institute_id: string;

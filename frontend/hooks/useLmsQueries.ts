@@ -34,6 +34,7 @@ import {
   getStudentBatchWorkspace,
   getStudentBatches,
   getStudentCourses,
+  getStudentDashboard,
   getStudentModules,
   submitStudentContentResponse,
   updateContent,
@@ -149,6 +150,10 @@ export function usePublicSubCoursesQuery(courseId?: string) {
 
 export function useStudentCoursesQuery() {
   return useQuery({ queryKey: ["student-courses"], queryFn: getStudentCourses });
+}
+
+export function useStudentDashboardQuery() {
+  return useQuery({ queryKey: ["student-dashboard"], queryFn: getStudentDashboard });
 }
 
 export function useStudentBatchesQuery() {

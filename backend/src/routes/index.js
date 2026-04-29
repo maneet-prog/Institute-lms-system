@@ -13,11 +13,11 @@ const router = express.Router();
 router.use("/auth", authRoutes);
 router.use("/institutes", instituteRoutes);
 router.use("/users", userRoutes);
+router.use("/progress", progressRoutes);
+router.use("/students", studentRoutes);
 router.use("/", courseRoutes);
 router.use("/", contentRoutes);
 router.use("/", enrollmentRoutes);
 router.use("/", batchRoutes);
-router.use("/progress", progressRoutes);
-router.use("/students", studentRoutes);
 
 module.exports = router;

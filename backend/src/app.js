@@ -10,6 +10,9 @@ const { connectDb } = require("./config/db");
 const routes = require("./routes");
 const errorMiddleware = require("./middlewares/errorMiddleware");
 const { bootstrapDefaults } = require("./services/bootstrapService");
+const dns = require("dns");
+
+dns.setServers(["1.1.1.1", "8.8.8.8"]);
 
 const app = express();
 

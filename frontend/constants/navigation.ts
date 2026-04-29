@@ -101,6 +101,7 @@ export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
     {
       title: "Learning",
       items: [
+        { label: "Overview", href: "/dashboard/student", description: "Fresh dashboard summary" },
         { label: "My Courses", href: "/dashboard/student/courses", description: "Enrolled programs" },
         { label: "My Modules", href: "/dashboard/student/modules", description: "Study material and progress" }
       ]

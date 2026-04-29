@@ -4,6 +4,7 @@ import {
   Course,
   MessageResponse,
   Module,
+  StudentDashboardData,
   StudentBatchInfo,
   StudentBatchWorkspace,
   StudentModuleBundle,
@@ -254,6 +255,11 @@ export async function deleteContent(contentId: string): Promise<MessageResponse>
 
 export async function getStudentCourses(): Promise<Array<{ course_id: string; course_name: string; subcourse_id: string; subcourse_name: string }>> {
   const { data } = await api.get("/students/enrolled-courses");
+  return data;
+}
+
+export async function getStudentDashboard(): Promise<StudentDashboardData> {
+  const { data } = await api.get<StudentDashboardData>("/students/dashboard");
   return data;
 }
 

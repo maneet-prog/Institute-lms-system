@@ -1,5 +1,6 @@
 import axios from "axios";
 
+import { useAuthStore } from "@/store/auth";
 import { pushToast } from "@/store/ui";
 import { getToken } from "@/utils/storage";
 
@@ -12,7 +13,7 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = getToken();
+  const token = typeof window !== "undefined" ? useAuthStore.getState().token ?? getToken() : null;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

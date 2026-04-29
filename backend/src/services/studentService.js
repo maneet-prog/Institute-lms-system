@@ -1,12 +1,15 @@
 const Batch = require("../models/Batch");
 const Content = require("../models/Content");
 const Module = require("../models/Module");
+const UserProgress = require("../models/Progress");
 const StudentSubmission = require("../models/StudentSubmission");
 const { UserBatch, UserCourse, UserModule } = require("../models/Enrollment");
 const AppError = require("../utils/AppError");
 const { serializeContent, serializeStudentSubmission } = require("../utils/serializers");
 
 const getInstituteId = (user, tenant) => tenant?.instituteId || user?.instituteId || null;
+const average = (values) =>
+  values.length ? Math.round(values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length) : 0;
 
 const mapAssignmentRowToBatchInfo = (row) => ({
   batch_id: String(row.batchId._id),
@@ -254,6 +257,171 @@ const getBatchWorkspace = async (batchId, category, user, tenant) => {
   };
 };
 
+const getDashboard = async (user, tenant) => {
+  const instituteId = getInstituteId(user, tenant);
+  if (!instituteId) {
+    throw new AppError("User institute is not configured.", 403);
+  }
+
+  const batches = await getStudentBatches(user, tenant);
+  const student = {
+    user_id: String(user._id),
+    institute_id: String(instituteId),
+    first_name: user.firstName,
+    last_name: user.lastName,
+    email: user.email
+  };
+
+  if (!batches.length) {
+    return {
+      student,
+      overview: {
+        batch_count: 0,
+        module_count: 0,
+        completed_module_count: 0,
+        pending_module_count: 0,
+        average_progress_percent: 0
+      },
+      batches: [],
+      modules: []
+    };
+  }
+
+  const batchIds = batches.map((batch) => batch.batch_id);
+  const pairs = [...new Map(
+    batches.map((batch) => [
+      `${batch.course_id}::${batch.subcourse_id}`,
+      { courseId: batch.course_id, subcourseId: batch.subcourse_id }
+    ])
+  ).values()];
+
+  const modules = pairs.length
+    ? await Module.find({
+        instituteId,
+        active: true,
+        $or: pairs.map((pair) => ({
+          courseId: pair.courseId,
+          subcourseId: pair.subcourseId
+        }))
+      })
+        .sort({ createdAt: 1 })
+        .lean()
+    : [];
+
+  const moduleIds = modules.map((moduleItem) => moduleItem._id);
+  const contents = moduleIds.length
+    ? await Content.find({
+        instituteId,
+        batchId: { $in: batchIds },
+        moduleId: { $in: moduleIds }
+      })
+        .select("moduleId batchId title duration")
+        .sort({ orderIndex: 1, createdAt: 1, _id: 1 })
+        .lean()
+    : [];
+  const progressRows = moduleIds.length
+    ? await UserProgress.find({
+        instituteId,
+        userId: user._id,
+        moduleId: { $in: moduleIds }
+      }).lean()
+    : [];
+
+  const modulesByPair = new Map();
+  for (const moduleItem of modules) {
+    const key = `${String(moduleItem.courseId)}::${String(moduleItem.subcourseId)}`;
+    const list = modulesByPair.get(key) || [];
+    list.push(moduleItem);
+    modulesByPair.set(key, list);
+  }
+
+  const contentByBatchModule = new Map();
+  for (const content of contents) {
+    const key = `${String(content.batchId)}::${String(content.moduleId)}`;
+    const current = contentByBatchModule.get(key) || {
+      content_count: 0,
+      total_duration_minutes: 0,
+      next_content_title: null
+    };
+    current.content_count += 1;
+    current.total_duration_minutes += Number(content.duration || 0);
+    if (!current.next_content_title) {
+      current.next_content_title = content.title;
+    }
+    contentByBatchModule.set(key, current);
+  }
+
+  const progressByModule = new Map(progressRows.map((row) => [String(row.moduleId), row]));
+  const dashboardModules = [];
+  const batchSummaries = [];
+
+  for (const batch of batches) {
+    const pairKey = `${batch.course_id}::${batch.subcourse_id}`;
+    const pairModules = modulesByPair.get(pairKey) || [];
+    const visibleModules = [];
+
+    for (const moduleItem of pairModules) {
+      const moduleId = String(moduleItem._id);
+      const contentMeta = contentByBatchModule.get(`${batch.batch_id}::${moduleId}`) || null;
+      const progressMeta = progressByModule.get(moduleId) || null;
+
+      if (!contentMeta && !progressMeta) {
+        continue;
+      }
+
+      const item = {
+        module_id: moduleId,
+        module_name: moduleItem.moduleName,
+        batch_id: batch.batch_id,
+        batch_name: batch.batch_name,
+        course_id: batch.course_id,
+        course_name: batch.course_name,
+        subcourse_id: batch.subcourse_id,
+        subcourse_name: batch.subcourse_name,
+        content_count: contentMeta?.content_count || 0,
+        total_duration_minutes: contentMeta?.total_duration_minutes || 0,
+        next_content_title: contentMeta?.next_content_title || null,
+        completed: Boolean(progressMeta?.completed),
+        progress_percent: Number(progressMeta?.progressPercent || 0),
+        last_accessed: progressMeta?.lastAccessed || null
+      };
+
+      visibleModules.push(item);
+      dashboardModules.push(item);
+    }
+
+    batchSummaries.push({
+      ...batch,
+      module_count: visibleModules.length,
+      completed_module_count: visibleModules.filter((item) => item.completed).length,
+      average_progress_percent: average(visibleModules.map((item) => item.progress_percent))
+    });
+  }
+
+  dashboardModules.sort((left, right) => {
+    if (left.completed !== right.completed) {
+      return Number(left.completed) - Number(right.completed);
+    }
+    if (right.progress_percent !== left.progress_percent) {
+      return right.progress_percent - left.progress_percent;
+    }
+    return left.module_name.localeCompare(right.module_name);
+  });
+
+  return {
+    student,
+    overview: {
+      batch_count: batchSummaries.length,
+      module_count: dashboardModules.length,
+      completed_module_count: dashboardModules.filter((item) => item.completed).length,
+      pending_module_count: dashboardModules.filter((item) => !item.completed).length,
+      average_progress_percent: average(dashboardModules.map((item) => item.progress_percent))
+    },
+    batches: batchSummaries,
+    modules: dashboardModules
+  };
+};
+
 const submitContent = async (payload, user, tenant) => {
   const instituteId = getInstituteId(user, tenant);
   if (!instituteId) {
@@ -298,6 +466,7 @@ module.exports = {
   getEnrolledCourses,
   getModulesContent,
   getStudentBatches,
+  getDashboard,
   getBatchWorkspace,
   submitContent
 };

@@ -4,6 +4,9 @@ const service = require("../services/studentService");
 exports.enrolledCourses = asyncHandler(async (req, res) =>
   res.json(await service.getEnrolledCourses(req.user, req.tenant))
 );
+exports.dashboard = asyncHandler(async (req, res) =>
+  res.json(await service.getDashboard(req.user, req.tenant))
+);
 exports.modulesContent = asyncHandler(async (req, res) =>
   res.json(await service.getModulesContent(req.user, req.tenant))
 );
