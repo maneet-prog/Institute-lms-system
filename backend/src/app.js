@@ -10,7 +10,6 @@ const { connectDb } = require("./config/db");
 const routes = require("./routes");
 const errorMiddleware = require("./middlewares/errorMiddleware");
 const { bootstrapDefaults } = require("./services/bootstrapService");
-const courseController = require("./controllers/courseController");
 const dns = require("dns");
 
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
@@ -27,12 +26,6 @@ app.use(xssClean());
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 app.get("/health", (req, res) => res.json({ status: "ok" }));
-
-// Public routes - NO authentication required
-app.get("/public/courses", courseController.getPublicCourses);
-app.get("/public/subcourses", courseController.getPublicSubcourses);
-
-// All other routes (protected and unprotected)
 app.use(routes);
 app.use(errorMiddleware);
 
