@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const roleHome: Record<string, string> = {
-  super_admin: "/dashboard/admin",
-  institute_admin: "/dashboard/institute-admin",
-  teacher: "/dashboard/teacher",
+  super_admin: "/dashboard/admin/institutes",
+  institute_admin: "/dashboard/institute-admin/users",
+  teacher: "/dashboard/teacher/batches",
   student: "/dashboard/student"
 };
 

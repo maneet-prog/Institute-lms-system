@@ -11,6 +11,12 @@ export default function LoginPage() {
         <p className="mb-4 text-sm text-slate-600">Access your LMS dashboard based on your role.</p>
         <LoginForm />
         <p className="mt-4 text-sm text-slate-600">
+          Forgot your password?{" "}
+          <Link href="/forgot-password" className="text-brand-700 hover:underline">
+            Reset with email and mobile
+          </Link>
+        </p>
+        <p className="mt-4 text-sm text-slate-600">
           New user?{" "}
           <Link href="/register" className="text-brand-700 hover:underline">
             Create account

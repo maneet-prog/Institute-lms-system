@@ -1,3 +1,5 @@
+import type { User } from "@/types/lms";
+
 export type Role = "super_admin" | "institute_admin" | "teacher" | "student";
 
 export interface AuthUser {
@@ -14,6 +16,37 @@ export interface LoginResponse {
   token_type: "bearer";
 }
 
+export interface RegistrationStartResponse {
+  verification_id: string;
+  expires_at: string;
+  message: string;
+  delivery?: {
+    email_preview?: {
+      to: string;
+      subject: string;
+      text: string;
+      html: string;
+    } | null;
+    sms_preview?: {
+      to: string;
+      message: string;
+    } | null;
+    email_otp?: string;
+    mobile_otp?: string;
+  };
+}
+
+export interface RegistrationVerifyPayload {
+  verification_id: string;
+  email_otp: string;
+  mobile_otp: string;
+}
+
+export interface RegistrationVerifyResponse {
+  message: string;
+  user: User;
+}
+
 export interface RegisterPayload {
   first_name: string;
   last_name: string;
@@ -27,4 +60,22 @@ export interface RegisterPayload {
 export interface LoginPayload {
   email: string;
   password: string;
+}
+
+export interface ForgotPasswordPayload {
+  email: string;
+  mob_no: string;
+}
+
+export interface ForgotPasswordResponse {
+  message: string;
+  delivery?: {
+    email_preview?: {
+      to: string;
+      subject: string;
+      text: string;
+      html: string;
+    } | null;
+    temporary_password?: string;
+  };
 }

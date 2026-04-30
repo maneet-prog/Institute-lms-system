@@ -1,10 +1,10 @@
 "use client";
 
-import { Content } from "@/types/lms";
+import { Content, StudentWorkspaceContent } from "@/types/lms";
 
 import { QuizContent } from "@/components/content/QuizContent";
 
-function getUrl(content: Content) {
+function getUrl(content: Content | StudentWorkspaceContent) {
   return content.resolved_url ?? content.file_url ?? content.external_url ?? content.url ?? "";
 }
 
@@ -15,7 +15,7 @@ function getYoutubeEmbedUrl(url: string) {
   return match ? `https://www.youtube.com/embed/${match[1]}` : null;
 }
 
-export function ContentRenderer({ content }: { content: Content }) {
+export function ContentRenderer({ content }: { content: Content | StudentWorkspaceContent }) {
   const url = getUrl(content);
 
   if (content.type === "video") {

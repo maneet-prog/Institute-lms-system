@@ -173,6 +173,7 @@ function buildContentFormData(payload: {
   instructions?: string;
   downloadable?: boolean;
   response_type?: string;
+  quiz_payload?: string;
   duration?: number;
   institute_id?: string;
   replace_file?: boolean;
@@ -210,6 +211,7 @@ export async function addContent(payload: {
   instructions?: string;
   downloadable?: boolean;
   response_type?: string;
+  quiz_payload?: string;
   duration?: number;
   institute_id?: string;
   file?: File | null;
@@ -238,6 +240,7 @@ export async function updateContent(
     instructions?: string;
     downloadable?: boolean;
     response_type?: string;
+    quiz_payload?: string;
     duration?: number;
     institute_id?: string;
     replace_file?: boolean;
@@ -285,6 +288,11 @@ export async function submitStudentContentResponse(payload: {
   response_type: string;
   response_text?: string;
   response_url?: string;
+  answers?: Array<{
+    question_id: string;
+    selected_option_id?: string;
+    response_text?: string;
+  }>;
 }): Promise<StudentSubmission> {
   const { data } = await api.post<StudentSubmission>("/students/content-submissions", payload);
   return data;

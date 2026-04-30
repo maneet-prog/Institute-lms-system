@@ -1,4 +1,14 @@
+"use client";
+
 import Link from "next/link";
+
+import { OverviewBarChart } from "@/components/ui/OverviewBarChart";
+import {
+  useBatchesQuery,
+  useCoursesQuery,
+  useInstitutesQuery,
+  useUsersQuery
+} from "@/hooks/useLmsQueries";
 
 const adminHighlights = [
   { title: "Institute network management", description: "Create institutes, review activity, and keep branch records consistent.", href: "/dashboard/admin/institutes" },
@@ -8,6 +18,11 @@ const adminHighlights = [
 ];
 
 export default function AdminDashboardPage() {
+  const { data: institutes = [] } = useInstitutesQuery({ refetchInterval: 15000 });
+  const { data: users = [] } = useUsersQuery({ refetchInterval: 15000 });
+  const { data: courses = [] } = useCoursesQuery({ refetchInterval: 15000 });
+  const { data: batches = [] } = useBatchesQuery(undefined, { refetchInterval: 15000 });
+
   return (
     <section className="page-shell">
       <div className="rounded-[2rem] bg-slate-900 p-8 text-white shadow-sm">
@@ -16,6 +31,43 @@ export default function AdminDashboardPage() {
         <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">
           Use the central dashboard to coordinate institutes, control delivery structures, and keep registrations, teaching resources, and operations aligned across the LMS.
         </p>
+      </div>
+
+      <div className="mt-8 grid gap-4 md:grid-cols-4">
+        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-slate-500">Institutes</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{institutes.length}</p>
+        </div>
+        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-slate-500">Users</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{users.length}</p>
+        </div>
+        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-slate-500">Courses</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{courses.length}</p>
+        </div>
+        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-slate-500">Batches</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{batches.length}</p>
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <OverviewBarChart
+          title="Network Snapshot"
+          subtitle="A live visual summary of the current admin workspace queries."
+          primaryLabel="Total"
+          secondaryLabel="Pending / Active"
+          points={[
+            { label: "Inst", value: institutes.length, secondaryValue: institutes.filter((institute) => institute.active).length },
+            { label: "Users", value: users.length, secondaryValue: users.filter((user) => !user.is_approved).length },
+            { label: "Teach", value: users.filter((user) => user.role_names.includes("teacher")).length, secondaryValue: 0 },
+            { label: "Stud", value: users.filter((user) => user.role_names.includes("student")).length, secondaryValue: 0 },
+            { label: "Course", value: courses.length, secondaryValue: 0 },
+            { label: "Batch", value: batches.length, secondaryValue: 0 },
+            { label: "Queue", value: users.filter((user) => !user.is_approved).length, secondaryValue: 0 }
+          ]}
+        />
       </div>
 
       <div className="mt-8 grid gap-5 md:grid-cols-2">

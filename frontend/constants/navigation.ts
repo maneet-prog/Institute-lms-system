@@ -89,7 +89,8 @@ export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       title: "Teaching",
       items: [
         { label: "My Batches", href: "/dashboard/teacher/batches", description: "Assigned class groups" },
-        { label: "Modules", href: "/dashboard/teacher/modules", description: "Learning modules" }
+        { label: "Modules", href: "/dashboard/teacher/modules", description: "Learning modules" },
+        { label: "Submissions", href: "/dashboard/teacher/submissions", description: "Review learner work" }
       ]
     },
     {

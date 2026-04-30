@@ -1,6 +1,7 @@
 "use client";
 
 import { AppLink } from "@/components/navigation/AppLink";
+import { OverviewBarChart } from "@/components/ui/OverviewBarChart";
 import { Card } from "@/components/ui/Card";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { useStudentDashboardQuery } from "@/hooks/useLmsQueries";
@@ -18,10 +19,14 @@ const emptyDashboard = {
     module_count: 0,
     completed_module_count: 0,
     pending_module_count: 0,
-    average_progress_percent: 0
+    average_progress_percent: 0,
+    submission_count: 0,
+    reviewed_submission_count: 0
   },
+  activity_chart: [],
   batches: [],
-  modules: []
+  modules: [],
+  submissions: []
 };
 
 function formatDateRange(start?: string | null, end?: string | null) {
@@ -49,7 +54,7 @@ function formatLastAccessed(value?: string | null) {
 }
 
 export default function StudentDashboardPage() {
-  const { data, isLoading } = useStudentDashboardQuery();
+  const { data, isLoading } = useStudentDashboardQuery({ refetchInterval: 15000 });
   const dashboard = data ?? emptyDashboard;
   const spotlightModules = dashboard.modules.slice(0, 6);
 
@@ -102,6 +107,18 @@ export default function StudentDashboardPage() {
           </p>
         </Card>
       </section>
+
+      <OverviewBarChart
+        title="Live Study Activity"
+        subtitle="Recent submissions and module completions from your current dashboard data."
+        primaryLabel="Submissions"
+        secondaryLabel="Completions"
+        points={dashboard.activity_chart.map((point) => ({
+          label: point.label,
+          value: point.submissions,
+          secondaryValue: point.module_completions
+        }))}
+      />
 
       <section>
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -199,10 +216,10 @@ export default function StudentDashboardPage() {
                 </div>
 
                 <AppLink
-                  href={`/dashboard/student/courses/${module.batch_id}`}
+                  href={`/dashboard/student/modules/${module.batch_id}/${module.module_id}`}
                   className="inline-block text-sm font-medium text-brand-700 hover:underline"
                 >
-                  Resume from batch workspace
+                  Open module detail
                 </AppLink>
               </Card>
             ))}
@@ -211,6 +228,50 @@ export default function StudentDashboardPage() {
           <Card>
             <p className="text-sm text-slate-600">
               Your modules will show up here as soon as content is added to your assigned batch.
+            </p>
+          </Card>
+        )}
+      </section>
+
+      <section>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">Your Submissions</h2>
+            <p className="text-sm text-slate-600">Track quiz attempts, activity uploads, and review status in one place.</p>
+          </div>
+        </div>
+
+        {dashboard.submissions.length ? (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {dashboard.submissions.slice(0, 8).map((submission) => (
+              <Card key={submission.submission_id} className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-semibold text-slate-900">{submission.content_title}</p>
+                    <p className="text-sm text-slate-600">
+                      {submission.batch_name} | {submission.module_name}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                    Attempt {submission.latest_attempt_number}
+                  </span>
+                </div>
+                <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-2">
+                  <p>Type: {submission.submission_kind}</p>
+                  <p>Status: {submission.review_status}</p>
+                  <p>Auto score: {submission.latest_auto_score}/{submission.max_score}</p>
+                  <p>Final marks: {submission.latest_awarded_marks ?? "Pending review"}</p>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Submitted on {new Date(submission.latest_submitted_at || submission.submitted_at).toLocaleString("en-IN")}
+                </p>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card>
+            <p className="text-sm text-slate-600">
+              Your submissions will appear here once you start responding to quizzes or activity prompts.
             </p>
           </Card>
         )}

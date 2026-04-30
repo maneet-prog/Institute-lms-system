@@ -35,5 +35,20 @@ exports.studentSubmissionSchema = Joi.object({
   content_id: Joi.string().required(),
   response_type: Joi.string().required(),
   response_text: Joi.string().allow("", null),
-  response_url: Joi.string().uri().allow("", null)
+  response_url: Joi.string().uri().allow("", null),
+  answers: Joi.array()
+    .items(
+      Joi.object({
+        question_id: Joi.string().required(),
+        selected_option_id: Joi.string().allow("", null),
+        response_text: Joi.string().allow("", null)
+      })
+    )
+    .default([])
+});
+
+exports.submissionReviewSchema = Joi.object({
+  awarded_marks: Joi.number().min(0).required(),
+  feedback: Joi.string().allow("", null),
+  attempt_number: Joi.number().integer().min(1).optional()
 });

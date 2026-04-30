@@ -6,10 +6,34 @@ const StudentSubmission = require("../models/StudentSubmission");
 const { UserBatch, UserCourse, UserModule } = require("../models/Enrollment");
 const AppError = require("../utils/AppError");
 const { serializeContent, serializeStudentSubmission } = require("../utils/serializers");
+const { gradeQuizSubmission, resolveQuizFromContent } = require("../utils/quiz");
 
 const getInstituteId = (user, tenant) => tenant?.instituteId || user?.instituteId || null;
 const average = (values) =>
   values.length ? Math.round(values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length) : 0;
+const formatChartLabel = (date) =>
+  new Date(date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+
+const getLastAttempt = (submission) => {
+  const attempts = submission?.attempts || [];
+  return attempts.length ? attempts[attempts.length - 1] : null;
+};
+
+const buildSubmissionSummary = ({ submission, content, moduleItem, batch }) => {
+  const serialized = serializeStudentSubmission(submission);
+  const latestAttempt = getLastAttempt(submission);
+  return {
+    ...serialized,
+    content_id: String(content._id),
+    content_title: content.title,
+    content_type: content.type,
+    module_id: String(moduleItem._id),
+    module_name: moduleItem.moduleName,
+    batch_id: batch.batch_id,
+    batch_name: batch.batch_name,
+    latest_submitted_at: latestAttempt?.submittedAt || submission.submittedAt
+  };
+};
 
 const mapAssignmentRowToBatchInfo = (row) => ({
   batch_id: String(row.batchId._id),
@@ -140,7 +164,7 @@ const getModulesContent = async (user, tenant) => {
         batch_name: batch.batch_name,
         module_id: String(moduleItem._id),
         module_name: moduleItem.moduleName,
-        content: contents.map(serializeContent)
+        content: contents.map((content) => serializeContent(content, { includeQuizAnswers: false }))
       });
     }
   }
@@ -221,7 +245,7 @@ const getBatchWorkspace = async (batchId, category, user, tenant) => {
   const contentByModule = new Map();
   for (const content of filteredContents) {
     const serialized = {
-      ...serializeContent(content),
+      ...serializeContent(content, { includeQuizAnswers: false }),
       submission: submissionsByContent.get(String(content._id)) || null
     };
     if (!contentByModule.has(String(content.moduleId))) {
@@ -280,10 +304,14 @@ const getDashboard = async (user, tenant) => {
         module_count: 0,
         completed_module_count: 0,
         pending_module_count: 0,
-        average_progress_percent: 0
+        average_progress_percent: 0,
+        submission_count: 0,
+        reviewed_submission_count: 0
       },
+      activity_chart: [],
       batches: [],
-      modules: []
+      modules: [],
+      submissions: []
     };
   }
 
@@ -315,7 +343,7 @@ const getDashboard = async (user, tenant) => {
         batchId: { $in: batchIds },
         moduleId: { $in: moduleIds }
       })
-        .select("moduleId batchId title duration")
+        .select("moduleId batchId title duration type")
         .sort({ orderIndex: 1, createdAt: 1, _id: 1 })
         .lean()
     : [];
@@ -324,6 +352,13 @@ const getDashboard = async (user, tenant) => {
         instituteId,
         userId: user._id,
         moduleId: { $in: moduleIds }
+      }).lean()
+    : [];
+  const submissions = contents.length
+    ? await StudentSubmission.find({
+        instituteId,
+        userId: user._id,
+        contentId: { $in: contents.map((content) => content._id) }
       }).lean()
     : [];
 
@@ -352,8 +387,11 @@ const getDashboard = async (user, tenant) => {
   }
 
   const progressByModule = new Map(progressRows.map((row) => [String(row.moduleId), row]));
+  const contentById = new Map(contents.map((content) => [String(content._id), content]));
+  const moduleById = new Map(modules.map((moduleItem) => [String(moduleItem._id), moduleItem]));
   const dashboardModules = [];
   const batchSummaries = [];
+  const submissionSummaries = [];
 
   for (const batch of batches) {
     const pairKey = `${batch.course_id}::${batch.subcourse_id}`;
@@ -408,6 +446,60 @@ const getDashboard = async (user, tenant) => {
     return left.module_name.localeCompare(right.module_name);
   });
 
+  for (const submission of submissions) {
+    const content = contentById.get(String(submission.contentId));
+    if (!content) continue;
+    const moduleItem = moduleById.get(String(content.moduleId));
+    if (!moduleItem) continue;
+    const batch = batches.find((item) => item.batch_id === String(content.batchId));
+    if (!batch) continue;
+    submissionSummaries.push(
+      buildSubmissionSummary({
+        submission,
+        content,
+        moduleItem,
+        batch
+      })
+    );
+  }
+
+  submissionSummaries.sort((left, right) => {
+    const leftDate = new Date(left.latest_submitted_at || left.submitted_at || 0).getTime();
+    const rightDate = new Date(right.latest_submitted_at || right.submitted_at || 0).getTime();
+    return rightDate - leftDate;
+  });
+
+  const today = new Date();
+  const activityChart = [];
+  for (let offset = 6; offset >= 0; offset -= 1) {
+    const current = new Date(today);
+    current.setHours(0, 0, 0, 0);
+    current.setDate(current.getDate() - offset);
+    activityChart.push({
+      iso: current.toISOString().slice(0, 10),
+      label: formatChartLabel(current),
+      submissions: 0,
+      module_completions: 0
+    });
+  }
+  const chartByDay = new Map(activityChart.map((row) => [row.iso, row]));
+  for (const row of progressRows) {
+    if (!row.lastAccessed || !row.completed) continue;
+    const chartPoint = chartByDay.get(new Date(row.lastAccessed).toISOString().slice(0, 10));
+    if (chartPoint) {
+      chartPoint.module_completions += 1;
+    }
+  }
+  for (const submission of submissions) {
+    const latestAttempt = getLastAttempt(submission);
+    const submittedAt = latestAttempt?.submittedAt || submission.submittedAt;
+    if (!submittedAt) continue;
+    const chartPoint = chartByDay.get(new Date(submittedAt).toISOString().slice(0, 10));
+    if (chartPoint) {
+      chartPoint.submissions += 1;
+    }
+  }
+
   return {
     student,
     overview: {
@@ -415,10 +507,14 @@ const getDashboard = async (user, tenant) => {
       module_count: dashboardModules.length,
       completed_module_count: dashboardModules.filter((item) => item.completed).length,
       pending_module_count: dashboardModules.filter((item) => !item.completed).length,
-      average_progress_percent: average(dashboardModules.map((item) => item.progress_percent))
+      average_progress_percent: average(dashboardModules.map((item) => item.progress_percent)),
+      submission_count: submissionSummaries.length,
+      reviewed_submission_count: submissionSummaries.filter((item) => item.review_status === "reviewed").length
     },
+    activity_chart: activityChart.map(({ iso, ...row }) => row),
     batches: batchSummaries,
-    modules: dashboardModules
+    modules: dashboardModules,
+    submissions: submissionSummaries
   };
 };
 
@@ -444,20 +540,102 @@ const submitContent = async (payload, user, tenant) => {
     throw new AppError("Content access denied.", 400);
   }
 
-  const submission = await StudentSubmission.findOneAndUpdate(
-    {
-      userId: user._id,
-      instituteId,
-      contentId: payload.content_id
-    },
-    {
-      responseType: payload.response_type,
-      responseText: payload.response_text,
-      responseUrl: payload.response_url,
+  const existingSubmission = await StudentSubmission.findOne({
+    userId: user._id,
+    instituteId,
+    contentId: payload.content_id
+  });
+
+  if (content.type === "quiz") {
+    const quiz = resolveQuizFromContent(content);
+    if (!quiz) {
+      throw new AppError("Quiz details are missing for this assessment.", 400);
+    }
+
+    const attemptLimit = Number(quiz.attemptLimit || 1) || 1;
+    const currentAttemptCount = existingSubmission?.attempts?.length || 0;
+    if (currentAttemptCount >= attemptLimit) {
+      throw new AppError(`This quiz allows only ${attemptLimit} attempt${attemptLimit > 1 ? "s" : ""}.`, 400);
+    }
+
+    const grading = gradeQuizSubmission(quiz, payload.answers || []);
+    const attemptNumber = currentAttemptCount + 1;
+    const attempt = {
+      attemptNumber,
+      responseType: "quiz",
+      responseText: null,
+      responseUrl: null,
+      answers: grading.answers,
+      autoScore: grading.autoScore,
+      awardedMarks: grading.requiresManualReview ? null : grading.autoScore,
+      maxScore: grading.maxScore,
+      status: grading.requiresManualReview ? "submitted" : "reviewed",
+      feedback: null,
+      reviewedAt: grading.requiresManualReview ? null : new Date(),
+      reviewedBy: null,
       submittedAt: new Date()
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
+    };
+
+    const submission = existingSubmission || new StudentSubmission({
+      instituteId,
+      contentId: payload.content_id,
+      userId: user._id
+    });
+
+    submission.responseType = "quiz";
+    submission.responseText = null;
+    submission.responseUrl = null;
+    submission.submissionKind = "quiz";
+    submission.attempts = [...(submission.attempts || []), attempt];
+    submission.latestAttemptNumber = attemptNumber;
+    submission.latestAutoScore = grading.autoScore;
+    submission.latestAwardedMarks = grading.requiresManualReview ? null : grading.autoScore;
+    submission.maxScore = grading.maxScore;
+    submission.reviewStatus = grading.requiresManualReview ? "pending" : "reviewed";
+    submission.feedback = null;
+    submission.reviewedAt = grading.requiresManualReview ? null : new Date();
+    submission.reviewedBy = null;
+    submission.submittedAt = attempt.submittedAt;
+    await submission.save();
+    return serializeStudentSubmission(submission);
+  }
+
+  const attempt = {
+    attemptNumber: 1,
+    responseType: payload.response_type,
+    responseText: payload.response_text || null,
+    responseUrl: payload.response_url || null,
+    answers: [],
+    autoScore: 0,
+    awardedMarks: null,
+    maxScore: 0,
+    status: "submitted",
+    feedback: null,
+    reviewedAt: null,
+    reviewedBy: null,
+    submittedAt: new Date()
+  };
+
+  const submission = existingSubmission || new StudentSubmission({
+    instituteId,
+    contentId: payload.content_id,
+    userId: user._id
+  });
+  submission.responseType = payload.response_type;
+  submission.responseText = payload.response_text || null;
+  submission.responseUrl = payload.response_url || null;
+  submission.submissionKind = "activity";
+  submission.attempts = [attempt];
+  submission.latestAttemptNumber = 1;
+  submission.latestAutoScore = 0;
+  submission.latestAwardedMarks = null;
+  submission.maxScore = 0;
+  submission.reviewStatus = "pending";
+  submission.feedback = null;
+  submission.reviewedAt = null;
+  submission.reviewedBy = null;
+  submission.submittedAt = attempt.submittedAt;
+  await submission.save();
 
   return serializeStudentSubmission(submission);
 };

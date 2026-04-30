@@ -11,6 +11,7 @@ const {
   sameId
 } = require("./accessService");
 const { uploadFile, deleteFile } = require("./storageService");
+const { normalizeQuizPayload, validateQuizDefinition } = require("../utils/quiz");
 const { serializeContent } = require("../utils/serializers");
 
 const getModuleOrThrow = async (moduleId) => {
@@ -75,15 +76,20 @@ const assertContentWriteAccess = async (currentUser, instituteId, batch, content
   throw new AppError("Only admins or the creating teacher can modify this content.", 403);
 };
 
-const validateContentState = ({ contentType, description, fileUrl, externalUrl }) => {
+const validateContentState = ({ contentType, description, fileUrl, externalUrl, quiz }) => {
   if (["text", "quiz"].includes(contentType) && fileUrl) {
     throw new AppError("Text and quiz content cannot include uploaded files.", 400);
   }
   if (["video", "audio", "pdf", "document"].includes(contentType) && !(fileUrl || externalUrl)) {
     throw new AppError("File content requires either an uploaded file or an external URL.", 400);
   }
-  if (["text", "quiz"].includes(contentType) && !((description || "").trim() || externalUrl)) {
-    throw new AppError("Text and quiz content require a description or an external URL.", 400);
+  if (contentType === "quiz") {
+    if (!quiz) {
+      throw new AppError("Quiz content requires a quiz payload.", 400);
+    }
+    validateQuizDefinition(quiz);
+  } else if (contentType === "text" && !((description || "").trim() || externalUrl)) {
+    throw new AppError("Text content requires a description or an external URL.", 400);
   }
 };
 
@@ -111,11 +117,13 @@ const createContent = async (payload, file, tenant, user) => {
     ? await uploadFile(file, buildContentUploadSegments(instituteId, payload.batch_id, payload.module_id))
     : null;
   try {
+    const quiz = payload.type === "quiz" ? normalizeQuizPayload(payload.quiz_payload) : null;
     validateContentState({
       contentType: payload.type,
       description: payload.description,
       fileUrl: upload?.fileUrl || null,
-      externalUrl: payload.external_url
+      externalUrl: payload.external_url,
+      quiz
     });
 
     const content = await Content.create({
@@ -135,11 +143,12 @@ const createContent = async (payload, file, tenant, user) => {
         category: payload.category,
         instructions: payload.instructions,
         downloadable: payload.downloadable,
-        responseType: payload.response_type
+        responseType: payload.response_type,
+        quiz
       }
     });
 
-    return serializeContent(content);
+    return serializeContent(content, { includeQuizAnswers: true });
   } catch (error) {
     if (upload?.storageKey) {
       await deleteFile(upload.storageKey);
@@ -167,7 +176,7 @@ const listModuleContents = async (moduleId, batchId, tenant, currentUser) => {
     instituteId: batch.instituteId
   }).sort({ orderIndex: 1, createdAt: 1, _id: 1 });
 
-  return contents.map(serializeContent);
+  return contents.map((content) => serializeContent(content, { includeQuizAnswers: true }));
 };
 
 const updateContent = async (id, payload, file, tenant, currentUser) => {
@@ -201,13 +210,18 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
     payload.external_url !== undefined ? payload.external_url || null : content.externalUrl;
   const nextType = payload.type ?? content.type;
   const nextDescription = payload.description ?? content.description;
+  const nextQuiz =
+    nextType === "quiz"
+      ? normalizeQuizPayload(payload.quiz_payload !== undefined ? payload.quiz_payload : content.profile?.quiz || null)
+      : null;
 
   try {
     validateContentState({
       contentType: nextType,
       description: nextDescription,
       fileUrl: nextFileUrl,
-      externalUrl: nextExternalUrl
+      externalUrl: nextExternalUrl,
+      quiz: nextQuiz
     });
   } catch (error) {
     if (uploaded?.storageKey) {
@@ -232,13 +246,14 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
   if (payload.instructions !== undefined) content.profile.instructions = payload.instructions;
   if (payload.downloadable !== undefined) content.profile.downloadable = payload.downloadable;
   if (payload.response_type !== undefined) content.profile.responseType = payload.response_type;
+  content.profile.quiz = nextQuiz;
 
   await content.save();
   if ((uploaded || payload.replace_file) && oldStorageKey && oldStorageKey !== nextStorageKey) {
     await deleteFile(oldStorageKey);
   }
 
-  return serializeContent(content);
+  return serializeContent(content, { includeQuizAnswers: true });
 };
 
 const deleteContent = async (id, tenant, currentUser) => {

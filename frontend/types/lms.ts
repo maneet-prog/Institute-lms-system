@@ -86,6 +86,22 @@ export interface Content {
   instructions?: string | null;
   downloadable?: boolean;
   response_type?: string | null;
+  quiz?: {
+    mode: "mcq" | "written" | "mixed";
+    attempt_limit: number;
+    questions: Array<{
+      question_id: string;
+      type: "mcq" | "written";
+      prompt: string;
+      options: Array<{
+        option_id: string;
+        text: string;
+      }>;
+      correct_option_id?: string | null;
+      reference_answer?: string | null;
+      max_marks: number;
+    }>;
+  } | null;
   url?: string | null;
   duration: number;
   created_at?: string;
@@ -156,6 +172,41 @@ export interface StudentSubmission {
   response_type: string;
   response_text?: string | null;
   response_url?: string | null;
+  submission_kind: "activity" | "quiz";
+  latest_attempt_number: number;
+  latest_auto_score: number;
+  latest_awarded_marks?: number | null;
+  max_score: number;
+  review_status: "pending" | "reviewed";
+  feedback?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+  attempts: Array<{
+    attempt_number: number;
+    response_type: string;
+    response_text?: string | null;
+    response_url?: string | null;
+    auto_score: number;
+    awarded_marks?: number | null;
+    max_score: number;
+    status: "submitted" | "reviewed";
+    feedback?: string | null;
+    reviewed_at?: string | null;
+    reviewed_by?: string | null;
+    submitted_at: string;
+    answers: Array<{
+      question_id: string;
+      prompt: string;
+      question_type: "mcq" | "written";
+      selected_option_id?: string | null;
+      selected_option_text?: string | null;
+      response_text?: string | null;
+      correct_option_id?: string | null;
+      is_correct?: boolean | null;
+      auto_marks: number;
+      max_marks: number;
+    }>;
+  }>;
   submitted_at: string;
 }
 
@@ -203,6 +254,8 @@ export interface StudentDashboardOverview {
   completed_module_count: number;
   pending_module_count: number;
   average_progress_percent: number;
+  submission_count: number;
+  reviewed_submission_count: number;
 }
 
 export interface StudentDashboardBatch extends StudentBatchInfo {
@@ -237,8 +290,48 @@ export interface StudentDashboardData {
     email: string;
   };
   overview: StudentDashboardOverview;
+  activity_chart: Array<{
+    label: string;
+    submissions: number;
+    module_completions: number;
+  }>;
   batches: StudentDashboardBatch[];
   modules: StudentDashboardModule[];
+  submissions: Array<StudentSubmission & {
+    content_id: string;
+    content_title: string;
+    content_type: string;
+    module_id: string;
+    module_name: string;
+    batch_id: string;
+    batch_name: string;
+    latest_submitted_at?: string | null;
+  }>;
+}
+
+export interface ReviewableSubmission extends StudentSubmission {
+  student: {
+    user_id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+    mob_no: string;
+  } | null;
+  batch: {
+    batch_id: string;
+    batch_name: string;
+  };
+  module: {
+    module_id: string;
+    module_name: string;
+  };
+  content: {
+    content_id: string;
+    title: string;
+    type: string;
+    category: string;
+  };
+  latest_submitted_at?: string | null;
 }
 
 export interface UserProgress {

@@ -48,6 +48,7 @@ import {
   updateInstitute
 } from "@/services/institutes";
 import { getMyProgress, markProgress } from "@/services/progress";
+import { getReviewableSubmissions, reviewSubmission } from "@/services/submissions";
 import {
   approveUser,
   createUser,
@@ -58,30 +59,32 @@ import {
   updateUser
 } from "@/services/users";
 
-export function useInstitutesQuery() {
-  return useQuery({ queryKey: ["institutes"], queryFn: getInstitutes });
+export function useInstitutesQuery(options?: { refetchInterval?: number }) {
+  return useQuery({ queryKey: ["institutes"], queryFn: getInstitutes, refetchInterval: options?.refetchInterval });
 }
 
-export function useUsersQuery() {
-  return useQuery({ queryKey: ["users"], queryFn: getUsers });
+export function useUsersQuery(options?: { refetchInterval?: number }) {
+  return useQuery({ queryKey: ["users"], queryFn: getUsers, refetchInterval: options?.refetchInterval });
 }
 
-export function useUsersByInstituteQuery(instituteId?: string, options?: { enabled?: boolean }) {
+export function useUsersByInstituteQuery(instituteId?: string, options?: { enabled?: boolean; refetchInterval?: number }) {
   return useQuery({
     queryKey: ["users", "institute", instituteId ?? "current"],
     queryFn: () => getUsersByInstitute(instituteId),
-    enabled: options?.enabled ?? true
+    enabled: options?.enabled ?? true,
+    refetchInterval: options?.refetchInterval
   });
 }
 
-export function useCoursesQuery() {
-  return useQuery({ queryKey: ["courses"], queryFn: getCourses });
+export function useCoursesQuery(options?: { refetchInterval?: number }) {
+  return useQuery({ queryKey: ["courses"], queryFn: getCourses, refetchInterval: options?.refetchInterval });
 }
 
-export function useCoursesByInstituteQuery(instituteId?: string) {
+export function useCoursesByInstituteQuery(instituteId?: string, options?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: ["courses", "institute", instituteId ?? "current"],
-    queryFn: () => getCoursesByInstitute(instituteId)
+    queryFn: () => getCoursesByInstitute(instituteId),
+    refetchInterval: options?.refetchInterval
   });
 }
 
@@ -104,12 +107,13 @@ export function useSubCoursesByInstituteQuery(params?: {
 
 export function useModulesQuery(
   filters?: { course_id?: string; subcourse_id?: string; institute_id?: string },
-  options?: { enabled?: boolean }
+  options?: { enabled?: boolean; refetchInterval?: number }
 ) {
   return useQuery({
     queryKey: ["modules", filters?.institute_id ?? "current", filters?.course_id ?? "all", filters?.subcourse_id ?? "all"],
     queryFn: () => getModules(filters),
-    enabled: options?.enabled ?? true
+    enabled: options?.enabled ?? true,
+    refetchInterval: options?.refetchInterval
   });
 }
 
@@ -121,10 +125,11 @@ export function useModuleContentsQuery(moduleId?: string, batchId?: string) {
   });
 }
 
-export function useBatchesQuery(instituteId?: string) {
+export function useBatchesQuery(instituteId?: string, options?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: ["batches", instituteId ?? "current"],
-    queryFn: () => getBatches(instituteId)
+    queryFn: () => getBatches(instituteId),
+    refetchInterval: options?.refetchInterval
   });
 }
 
@@ -152,8 +157,8 @@ export function useStudentCoursesQuery() {
   return useQuery({ queryKey: ["student-courses"], queryFn: getStudentCourses });
 }
 
-export function useStudentDashboardQuery() {
-  return useQuery({ queryKey: ["student-dashboard"], queryFn: getStudentDashboard });
+export function useStudentDashboardQuery(options?: { refetchInterval?: number }) {
+  return useQuery({ queryKey: ["student-dashboard"], queryFn: getStudentDashboard, refetchInterval: options?.refetchInterval });
 }
 
 export function useStudentBatchesQuery() {
@@ -172,8 +177,17 @@ export function useStudentBatchWorkspaceQuery(batchId?: string, category?: strin
   });
 }
 
-export function useProgressQuery() {
-  return useQuery({ queryKey: ["progress"], queryFn: getMyProgress });
+export function useProgressQuery(options?: { refetchInterval?: number }) {
+  return useQuery({ queryKey: ["progress"], queryFn: getMyProgress, refetchInterval: options?.refetchInterval });
+}
+
+export function useReviewableSubmissionsQuery(batchId?: string, options?: { enabled?: boolean; refetchInterval?: number }) {
+  return useQuery({
+    queryKey: ["reviewable-submissions", batchId ?? "all"],
+    queryFn: () => getReviewableSubmissions(batchId),
+    enabled: options?.enabled ?? true,
+    refetchInterval: options?.refetchInterval
+  });
 }
 
 export function useCreateInstituteMutation() {
@@ -502,7 +516,28 @@ export function useMarkProgressMutation() {
     mutationFn: markProgress,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["progress"] });
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["student-modules"] });
       pushToast("Progress updated.", "success");
+    }
+  });
+}
+
+export function useReviewSubmissionMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      submissionId,
+      payload
+    }: {
+      submissionId: string;
+      payload: Parameters<typeof reviewSubmission>[1];
+    }) => reviewSubmission(submissionId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reviewable-submissions"] });
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["student-batch-workspace"] });
+      pushToast("Submission reviewed successfully.", "success");
     }
   });
 }

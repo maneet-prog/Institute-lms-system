@@ -50,6 +50,7 @@ exports.contentSchema = Joi.object({
   instructions: Joi.string().allow("", null),
   downloadable: Joi.boolean().default(false),
   response_type: Joi.string().allow("", null),
+  quiz_payload: Joi.string().allow("", null),
   duration: Joi.number().integer().min(0).default(0),
   institute_id: Joi.string().optional()
 });
@@ -65,6 +66,7 @@ exports.contentUpdateSchema = Joi.object({
   instructions: Joi.string().allow("", null),
   downloadable: Joi.boolean(),
   response_type: Joi.string().allow("", null),
+  quiz_payload: Joi.string().allow("", null),
   duration: Joi.number().integer().min(0),
   institute_id: Joi.string().optional(),
   replace_file: Joi.boolean().default(false)

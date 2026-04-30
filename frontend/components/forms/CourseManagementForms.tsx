@@ -11,6 +11,12 @@ import {
   useModulesQuery
 } from "@/hooks/useLmsQueries";
 import { Button } from "@/components/ui/Button";
+import {
+  createEmptyQuizDraft,
+  normalizeQuizDraft,
+  QuizBuilder,
+  type QuizDraft
+} from "@/components/content/QuizBuilder";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
@@ -76,6 +82,7 @@ export function CourseManagementForms({
     instructions: "",
     downloadable: false,
     response_type: "",
+    quiz: createEmptyQuizDraft() as QuizDraft,
     file: null as File | null
   });
 
@@ -98,14 +105,30 @@ export function CourseManagementForms({
     { enabled: Boolean(content.course_id && content.subcourse_id) }
   );
 
-  const requiresDescription = content.type === "text" || content.type === "quiz";
   const allowsFileUpload = ["video", "audio", "pdf", "document"].includes(content.type);
   const contentValidationMessage = (() => {
     if (!content.batch_id || !content.course_id || !content.subcourse_id || !content.module_id || !content.title.trim()) {
       return null;
     }
-    if (requiresDescription && !content.description.trim() && !content.external_url.trim()) {
-      return "Add a description or external URL for text and quiz content.";
+    if (content.type === "text" && !content.description.trim() && !content.external_url.trim()) {
+      return "Add a description or external URL for text content.";
+    }
+    if (content.type === "quiz") {
+      if (!content.quiz.questions.length) {
+        return "Add at least one quiz question.";
+      }
+      const hasIncompleteQuestion = content.quiz.questions.some((question) => {
+        if (!question.prompt.trim()) {
+          return true;
+        }
+        if (question.type === "mcq") {
+          return question.options.some((option) => !option.text.trim()) || !question.correct_option_id;
+        }
+        return false;
+      });
+      if (hasIncompleteQuestion) {
+        return "Complete each quiz question, option, and correct answer before saving.";
+      }
     }
     if (allowsFileUpload && !content.file && !content.external_url.trim()) {
       return "Upload a file or add an external URL for media and document content.";
@@ -293,7 +316,23 @@ export function CourseManagementForms({
       onSubmit={(event: FormEvent) => {
         event.preventDefault();
         addContent.mutate(
-          { ...content, institute_id: instituteId },
+          {
+            batch_id: content.batch_id,
+            module_id: content.module_id,
+            title: content.title,
+            type: content.type,
+            description: content.description,
+            external_url: content.external_url,
+            order_index: content.order_index,
+            category: content.category,
+            instructions: content.instructions,
+            downloadable: content.downloadable,
+            response_type: content.response_type,
+            institute_id: instituteId,
+            quiz_payload: content.type === "quiz" ? JSON.stringify(content.quiz) : undefined,
+            duration: content.duration,
+            file: content.file
+          },
           {
             onSuccess: () => {
               setContent((prev) => ({
@@ -306,6 +345,7 @@ export function CourseManagementForms({
                 instructions: "",
                 downloadable: false,
                 response_type: "",
+                quiz: createEmptyQuizDraft(),
                 file: null
               }));
               onSuccess?.();
@@ -384,7 +424,8 @@ export function CourseManagementForms({
               setContent((prev) => ({
                 ...prev,
                 type: e.target.value,
-                file: ["video", "audio", "pdf", "document"].includes(e.target.value) ? prev.file : null
+                file: ["video", "audio", "pdf", "document"].includes(e.target.value) ? prev.file : null,
+                quiz: e.target.value === "quiz" ? normalizeQuizDraft(prev.quiz) : prev.quiz
               }))
             }
             required
@@ -417,10 +458,10 @@ export function CourseManagementForms({
         <div className="grid gap-3 md:grid-cols-2">
           <Textarea
             className="md:col-span-2"
-            label={content.type === "quiz" ? "Description / Quiz JSON" : "Description / HTML Notes"}
+            label="Description / HTML Notes"
             value={content.description}
             onChange={(e) => setContent((prev) => ({ ...prev, description: e.target.value }))}
-            required={requiresDescription}
+            required={content.type === "text"}
             disabled={addContent.isPending}
           />
           <Input
@@ -464,6 +505,16 @@ export function CourseManagementForms({
           />
         </div>
       </div>
+
+      {content.type === "quiz" ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="mb-3 text-sm font-semibold text-slate-900">Quiz Builder</p>
+          <QuizBuilder
+            value={content.quiz}
+            onChange={(quiz) => setContent((prev) => ({ ...prev, quiz }))}
+          />
+        </div>
+      ) : null}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <p className="mb-3 text-sm font-semibold text-slate-900">Learner Settings</p>

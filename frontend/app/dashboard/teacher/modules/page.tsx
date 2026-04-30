@@ -118,6 +118,7 @@ export default function TeacherModulesPage() {
                 subcourses={selectedSubcourse ? [selectedSubcourse] : []}
                 selectedCourseId={selectedBatch.course_id}
                 selectedSubcourseId={selectedBatch.subcourse_id}
+                batchId={selectedBatch.batch_id}
                 instituteId={instituteId ?? undefined}
                 disableCoursePathSelection
                 onSuccess={() => setActiveForm(null)}

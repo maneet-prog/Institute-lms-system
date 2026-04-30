@@ -1,11 +1,42 @@
 const mongoose = require("mongoose");
 
+const quizOptionSchema = new mongoose.Schema(
+  {
+    optionId: { type: String, required: true },
+    text: { type: String, required: true, trim: true }
+  },
+  { _id: false }
+);
+
+const quizQuestionSchema = new mongoose.Schema(
+  {
+    questionId: { type: String, required: true },
+    type: { type: String, enum: ["mcq", "written"], required: true },
+    prompt: { type: String, required: true, trim: true },
+    options: { type: [quizOptionSchema], default: [] },
+    correctOptionId: { type: String, default: null },
+    referenceAnswer: { type: String, default: null },
+    maxMarks: { type: Number, min: 0, default: 1 }
+  },
+  { _id: false }
+);
+
+const quizProfileSchema = new mongoose.Schema(
+  {
+    mode: { type: String, enum: ["mcq", "written", "mixed"], default: "mcq" },
+    attemptLimit: { type: Number, min: 1, default: 1 },
+    questions: { type: [quizQuestionSchema], default: [] }
+  },
+  { _id: false }
+);
+
 const contentProfileSchema = new mongoose.Schema(
   {
     category: { type: String, default: "reading" },
     instructions: { type: String },
     downloadable: { type: Boolean, default: false },
-    responseType: { type: String }
+    responseType: { type: String },
+    quiz: { type: quizProfileSchema, default: null }
   },
   { _id: false }
 );

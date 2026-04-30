@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 
 import { getRoleHome } from "@/constants/routes";
-import { loginUser, registerUser } from "@/services/auth";
+import { forgotPassword, loginUser, registerUser, verifyRegistration } from "@/services/auth";
 import { useAuthStore } from "@/store/auth";
 import { useUiStore } from "@/store/ui";
 import { LoginPayload, RegisterPayload, Role } from "@/types/auth";
@@ -13,6 +13,12 @@ import { decodeJwt } from "@/utils/jwt";
 export function useRegister() {
   return useMutation({
     mutationFn: (payload: RegisterPayload) => registerUser(payload)
+  });
+}
+
+export function useVerifyRegistration() {
+  return useMutation({
+    mutationFn: verifyRegistration
   });
 }
 
@@ -39,5 +45,11 @@ export function useLogin() {
       startNavigation();
       router.replace(getRoleHome(role));
     }
+  });
+}
+
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: forgotPassword
   });
 }

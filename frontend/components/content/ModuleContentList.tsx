@@ -8,6 +8,12 @@ import {
   useModuleContentsQuery,
   useUpdateContentMutation
 } from "@/hooks/useLmsQueries";
+import {
+  createEmptyQuizDraft,
+  normalizeQuizDraft,
+  QuizBuilder,
+  type QuizDraft
+} from "@/components/content/QuizBuilder";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -25,6 +31,7 @@ type EditFormState = {
   instructions: string;
   downloadable: boolean;
   response_type: string;
+  quiz: QuizDraft;
   duration: number;
   replace_file: boolean;
   file: File | null;
@@ -40,6 +47,7 @@ const buildInitialForm = (content: Content): EditFormState => ({
   instructions: content.instructions ?? "",
   downloadable: Boolean(content.downloadable),
   response_type: content.response_type ?? "",
+  quiz: content.quiz ? normalizeQuizDraft(content.quiz) : createEmptyQuizDraft(),
   duration: content.duration,
   replace_file: false,
   file: null
@@ -136,7 +144,17 @@ export function ModuleContentList({
                 { label: "Quiz", value: "quiz" }
               ]}
               value={form.type}
-              onChange={(e) => setForm((prev) => (prev ? { ...prev, type: e.target.value } : prev))}
+              onChange={(e) =>
+                setForm((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        type: e.target.value,
+                        quiz: e.target.value === "quiz" ? normalizeQuizDraft(prev.quiz) : prev.quiz
+                      }
+                    : prev
+                )
+              }
             />
             <Textarea
               label="Description"
@@ -165,6 +183,12 @@ export function ModuleContentList({
               value={form.instructions}
               onChange={(e) => setForm((prev) => (prev ? { ...prev, instructions: e.target.value } : prev))}
             />
+            {form.type === "quiz" ? (
+              <QuizBuilder
+                value={form.quiz}
+                onChange={(quiz) => setForm((prev) => (prev ? { ...prev, quiz } : prev))}
+              />
+            ) : null}
             <Input
               label="Display Order"
               type="number"
@@ -229,6 +253,7 @@ export function ModuleContentList({
                         instructions: form.instructions,
                         downloadable: form.downloadable,
                         response_type: form.response_type,
+                        quiz_payload: form.type === "quiz" ? JSON.stringify(form.quiz) : undefined,
                         duration: form.duration,
                         replace_file: form.replace_file,
                         file: form.file

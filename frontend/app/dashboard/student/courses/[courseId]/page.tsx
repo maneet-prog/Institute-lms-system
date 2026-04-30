@@ -3,6 +3,7 @@
 import { ChangeEvent, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 
+import { AppLink } from "@/components/navigation/AppLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ContentRenderer } from "@/components/content/ContentRenderer";
@@ -86,8 +87,18 @@ export default function StudentCourseWorkspacePage() {
 
       {data.modules.map((module) => (
         <Card key={module.module_id}>
-          <h2 className="text-lg font-semibold">{module.module_name}</h2>
-          <p className="mt-1 text-sm text-slate-600">{module.subcourse_name}</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">{module.module_name}</h2>
+              <p className="mt-1 text-sm text-slate-600">{module.subcourse_name}</p>
+            </div>
+            <AppLink
+              href={`/dashboard/student/modules/${data.batch_id}/${module.module_id}`}
+              className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Open Module Page
+            </AppLink>
+          </div>
           <div className="mt-4 space-y-4">
             {module.content.map((item) => (
               <div key={item.content_id} className="rounded-xl border p-4">
@@ -170,9 +181,13 @@ export default function StudentCourseWorkspacePage() {
                 ) : null}
 
                 {item.submission ? (
-                  <p className="mt-3 text-xs text-emerald-700">
-                    Submitted on {new Date(item.submission.submitted_at).toLocaleString()}
-                  </p>
+                  <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                    <p>Submitted on {new Date(item.submission.submitted_at).toLocaleString("en-IN")}</p>
+                    <p>
+                      Status: {item.submission.review_status} | Latest marks:{" "}
+                      {item.submission.latest_awarded_marks ?? item.submission.latest_auto_score}/{item.submission.max_score}
+                    </p>
+                  </div>
                 ) : null}
               </div>
             ))}

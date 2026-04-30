@@ -56,7 +56,7 @@ const serializeModule = (module) => ({
   active: module.active
 });
 
-const serializeContent = (content) => ({
+const serializeContent = (content, options = {}) => ({
   content_id: asId(content._id),
   institute_id: asId(content.instituteId),
   module_id: asId(content.moduleId),
@@ -74,6 +74,25 @@ const serializeContent = (content) => ({
   instructions: content.profile?.instructions ?? null,
   downloadable: Boolean(content.profile?.downloadable),
   response_type: content.profile?.responseType ?? null,
+  quiz:
+    content.profile?.quiz && Array.isArray(content.profile.quiz.questions)
+      ? {
+          mode: content.profile.quiz.mode || "mcq",
+          attempt_limit: content.profile.quiz.attemptLimit ?? 1,
+          questions: content.profile.quiz.questions.map((question) => ({
+            question_id: question.questionId,
+            type: question.type,
+            prompt: question.prompt,
+            options: (question.options || []).map((option) => ({
+              option_id: option.optionId,
+              text: option.text
+            })),
+            correct_option_id: options.includeQuizAnswers === false ? null : question.correctOptionId ?? null,
+            reference_answer: options.includeQuizAnswers === false ? null : question.referenceAnswer ?? null,
+            max_marks: question.maxMarks ?? 1
+          }))
+        }
+      : null,
   url: content.fileUrl || content.externalUrl || null,
   duration: content.duration ?? 0,
   created_at: content.createdAt,
@@ -126,6 +145,41 @@ const serializeStudentSubmission = (submission) => ({
   response_type: submission.responseType,
   response_text: submission.responseText ?? null,
   response_url: submission.responseUrl ?? null,
+  submission_kind: submission.submissionKind ?? "activity",
+  latest_attempt_number: submission.latestAttemptNumber ?? 1,
+  latest_auto_score: submission.latestAutoScore ?? 0,
+  latest_awarded_marks: submission.latestAwardedMarks ?? null,
+  max_score: submission.maxScore ?? 0,
+  review_status: submission.reviewStatus ?? "pending",
+  feedback: submission.feedback ?? null,
+  reviewed_at: submission.reviewedAt ?? null,
+  reviewed_by: asId(submission.reviewedBy),
+  attempts: (submission.attempts || []).map((attempt) => ({
+    attempt_number: attempt.attemptNumber,
+    response_type: attempt.responseType,
+    response_text: attempt.responseText ?? null,
+    response_url: attempt.responseUrl ?? null,
+    auto_score: attempt.autoScore ?? 0,
+    awarded_marks: attempt.awardedMarks ?? null,
+    max_score: attempt.maxScore ?? 0,
+    status: attempt.status ?? "submitted",
+    feedback: attempt.feedback ?? null,
+    reviewed_at: attempt.reviewedAt ?? null,
+    reviewed_by: asId(attempt.reviewedBy),
+    submitted_at: attempt.submittedAt,
+    answers: (attempt.answers || []).map((answer) => ({
+      question_id: answer.questionId,
+      prompt: answer.prompt,
+      question_type: answer.questionType,
+      selected_option_id: answer.selectedOptionId ?? null,
+      selected_option_text: answer.selectedOptionText ?? null,
+      response_text: answer.responseText ?? null,
+      correct_option_id: answer.correctOptionId ?? null,
+      is_correct: answer.isCorrect,
+      auto_marks: answer.autoMarks ?? 0,
+      max_marks: answer.maxMarks ?? 0
+    }))
+  })),
   submitted_at: submission.submittedAt
 });
 
