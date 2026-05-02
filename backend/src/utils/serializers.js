@@ -1,4 +1,5 @@
 const { asId } = require("../services/accessService");
+const { sanitizeRenderer } = require("./tecaiReading");
 
 const serializeInstitute = (institute) => ({
   institute_id: asId(institute._id),
@@ -75,11 +76,12 @@ const serializeContent = (content, options = {}) => ({
   downloadable: Boolean(content.profile?.downloadable),
   response_type: content.profile?.responseType ?? null,
   quiz:
-    content.profile?.quiz && Array.isArray(content.profile.quiz.questions)
+    content.profile?.quiz &&
+    (Array.isArray(content.profile.quiz.questions) || content.profile.quiz.renderer?.kind === "tecai_reading")
       ? {
           mode: content.profile.quiz.mode || "mcq",
-          attempt_limit: content.profile.quiz.attemptLimit ?? 1,
-          questions: content.profile.quiz.questions.map((question) => ({
+          attempt_limit: content.profile.quiz.attemptLimit ?? 999,
+          questions: (content.profile.quiz.questions || []).map((question) => ({
             question_id: question.questionId,
             type: question.type,
             prompt: question.prompt,
@@ -90,7 +92,8 @@ const serializeContent = (content, options = {}) => ({
             correct_option_id: options.includeQuizAnswers === false ? null : question.correctOptionId ?? null,
             reference_answer: options.includeQuizAnswers === false ? null : question.referenceAnswer ?? null,
             max_marks: question.maxMarks ?? 1
-          }))
+          })),
+          renderer: sanitizeRenderer(content.profile.quiz.renderer, options.includeQuizAnswers !== false)
         }
       : null,
   url: content.fileUrl || content.externalUrl || null,

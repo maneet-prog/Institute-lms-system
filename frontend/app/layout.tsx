@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 
 import { Providers } from "@/app/providers";
-import { AppHeader } from "@/components/layout/AppHeader";
-import { NavigationOverlay } from "@/components/layout/NavigationOverlay";
+import { AppChrome } from "@/components/layout/AppChrome";
 import { Toaster } from "@/components/ui/Toaster";
 import "./globals.css";
 
@@ -16,10 +15,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body>
         <Providers>
-          <AppHeader />
-          <NavigationOverlay />
+          <AppChrome>{children}</AppChrome>
           <Toaster />
-          <main>{children}</main>
         </Providers>
       </body>
     </html>

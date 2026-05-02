@@ -42,7 +42,7 @@ const createQuestion = (type: "mcq" | "written" = "mcq") => ({
 export function createEmptyQuizDraft(): QuizDraft {
   return {
     mode: "mcq",
-    attempt_limit: 1,
+    attempt_limit: 0,
     questions: [createQuestion("mcq")]
   };
 }
@@ -53,7 +53,7 @@ export function normalizeQuizDraft(value?: QuizDraft | null): QuizDraft {
   }
   return {
     mode: value.mode || "mcq",
-    attempt_limit: value.attempt_limit || 1,
+    attempt_limit: value.attempt_limit ?? 0,
     questions: value.questions.map((question) => ({
       question_id: question.question_id || createId("question"),
       type: question.type || "mcq",
@@ -93,14 +93,14 @@ export function QuizBuilder({
           onChange={(event) => onChange({ ...value, mode: event.target.value as QuizDraft["mode"] })}
         />
         <Input
-          label="Attempt Limit"
+          label="Attempt Limit (0 = Unlimited)"
           type="number"
-          min={1}
+          min="0"
           value={String(value.attempt_limit)}
           onChange={(event) =>
             onChange({
               ...value,
-              attempt_limit: Math.max(1, Number(event.target.value) || 1)
+              attempt_limit: Math.max(0, Number(event.target.value) || 0)
             })
           }
         />

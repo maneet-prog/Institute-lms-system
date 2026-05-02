@@ -25,7 +25,8 @@ const quizProfileSchema = new mongoose.Schema(
   {
     mode: { type: String, enum: ["mcq", "written", "mixed"], default: "mcq" },
     attemptLimit: { type: Number, min: 1, default: 1 },
-    questions: { type: [quizQuestionSchema], default: [] }
+    questions: { type: [quizQuestionSchema], default: [] },
+    renderer: { type: mongoose.Schema.Types.Mixed, default: null }
   },
   { _id: false }
 );

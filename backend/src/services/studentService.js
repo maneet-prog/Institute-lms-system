@@ -558,8 +558,54 @@ const submitContent = async (payload, user, tenant) => {
       throw new AppError(`This quiz allows only ${attemptLimit} attempt${attemptLimit > 1 ? "s" : ""}.`, 400);
     }
 
-    const grading = gradeQuizSubmission(quiz, payload.answers || []);
     const attemptNumber = currentAttemptCount + 1;
+
+    if (quiz.renderer?.kind === "tecai_reading") {
+      if (!(payload.response_text || "").trim()) {
+        throw new AppError("Exam answers are missing for this submission.", 400);
+      }
+
+      const attempt = {
+        attemptNumber,
+        responseType: "quiz",
+        responseText: payload.response_text,
+        responseUrl: null,
+        answers: [],
+        autoScore: 0,
+        awardedMarks: null,
+        maxScore: 0,
+        status: "submitted",
+        feedback: null,
+        reviewedAt: null,
+        reviewedBy: null,
+        submittedAt: new Date()
+      };
+
+      const submission = existingSubmission || new StudentSubmission({
+        instituteId,
+        contentId: payload.content_id,
+        userId: user._id
+      });
+
+      submission.responseType = "quiz";
+      submission.responseText = payload.response_text;
+      submission.responseUrl = null;
+      submission.submissionKind = "quiz";
+      submission.attempts = [...(submission.attempts || []), attempt];
+      submission.latestAttemptNumber = attemptNumber;
+      submission.latestAutoScore = 0;
+      submission.latestAwardedMarks = null;
+      submission.maxScore = 0;
+      submission.reviewStatus = "pending";
+      submission.feedback = null;
+      submission.reviewedAt = null;
+      submission.reviewedBy = null;
+      submission.submittedAt = attempt.submittedAt;
+      await submission.save();
+      return serializeStudentSubmission(submission);
+    }
+
+    const grading = gradeQuizSubmission(quiz, payload.answers || []);
     const attempt = {
       attemptNumber,
       responseType: "quiz",

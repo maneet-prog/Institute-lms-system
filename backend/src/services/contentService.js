@@ -1,6 +1,7 @@
 const Batch = require("../models/Batch");
 const Content = require("../models/Content");
 const Module = require("../models/Module");
+const StudentSubmission = require("../models/StudentSubmission");
 const AppError = require("../utils/AppError");
 const {
   asId,
@@ -12,7 +13,8 @@ const {
 } = require("./accessService");
 const { uploadFile, deleteFile } = require("./storageService");
 const { normalizeQuizPayload, validateQuizDefinition } = require("../utils/quiz");
-const { serializeContent } = require("../utils/serializers");
+const { buildTecaiQuizFromDocx, sanitizeRenderer } = require("../utils/tecaiReading");
+const { serializeContent, serializeStudentSubmission } = require("../utils/serializers");
 
 const getModuleOrThrow = async (moduleId) => {
   const moduleItem = await Module.findById(moduleId);
@@ -77,15 +79,15 @@ const assertContentWriteAccess = async (currentUser, instituteId, batch, content
 };
 
 const validateContentState = ({ contentType, description, fileUrl, externalUrl, quiz }) => {
-  if (["text", "quiz"].includes(contentType) && fileUrl) {
-    throw new AppError("Text and quiz content cannot include uploaded files.", 400);
+  if (contentType === "text" && fileUrl) {
+    throw new AppError("Text content cannot include uploaded files.", 400);
   }
   if (["video", "audio", "pdf", "document"].includes(contentType) && !(fileUrl || externalUrl)) {
     throw new AppError("File content requires either an uploaded file or an external URL.", 400);
   }
   if (contentType === "quiz") {
     if (!quiz) {
-      throw new AppError("Quiz content requires a quiz payload.", 400);
+      throw new AppError("Quiz content requires a generated DOCX source or quiz payload.", 400);
     }
     validateQuizDefinition(quiz);
   } else if (contentType === "text" && !((description || "").trim() || externalUrl)) {
@@ -102,6 +104,69 @@ const buildContentUploadSegments = (instituteId, batchId, moduleId) => [
   moduleId
 ];
 
+const previewQuiz = async (file) => {
+  const quiz = await buildTecaiQuizFromDocx(file);
+  return {
+    mode: quiz.mode,
+    attempt_limit: quiz.attemptLimit ?? 999,
+    questions: (quiz.questions || []).map((question) => ({
+      question_id: question.questionId,
+      type: question.type,
+      prompt: question.prompt,
+      options: (question.options || []).map((option) => ({
+        option_id: option.optionId,
+        text: option.text
+      })),
+      correct_option_id: question.correctOptionId ?? null,
+      reference_answer: question.referenceAnswer ?? null,
+      max_marks: question.maxMarks ?? 1
+    })),
+    renderer: sanitizeRenderer(quiz.renderer)
+  };
+};
+
+const getTecaiExamData = async (contentId, tenant, currentUser) => {
+  const content = await Content.findById(contentId);
+  if (!content) {
+    throw new AppError("Content not found.", 404);
+  }
+
+  const moduleItem = await getModuleOrThrow(content.moduleId);
+  const batch = await getBatchOrThrow(content.batchId);
+  assertBatchModuleLink(batch, moduleItem);
+  await assertBatchAccess({
+    currentUser,
+    instituteId: asId(content.instituteId),
+    batch,
+    forWrite: false
+  });
+
+  if (content.type !== "quiz") {
+    throw new AppError("This content is not a quiz.", 400);
+  }
+
+  const renderer = sanitizeRenderer(content.profile?.quiz?.renderer);
+  if (!renderer) {
+    throw new AppError("TECAI exam data is not configured for this quiz.", 400);
+  }
+
+  let submission;
+  if (hasRole(currentUser, "student")) {
+    const existingSubmission = await StudentSubmission.findOne({
+      instituteId: content.instituteId,
+      contentId: content._id,
+      userId: currentUser._id
+    });
+    submission = existingSubmission ? serializeStudentSubmission(existingSubmission) : null;
+  }
+
+  return {
+    content: serializeContent(content, { includeQuizAnswers: false }),
+    renderer,
+    submission
+  };
+};
+
 const createContent = async (payload, file, tenant, user) => {
   const instituteId = await resolveInstituteScope({
     requestedInstituteId: payload.institute_id,
@@ -117,7 +182,10 @@ const createContent = async (payload, file, tenant, user) => {
     ? await uploadFile(file, buildContentUploadSegments(instituteId, payload.batch_id, payload.module_id))
     : null;
   try {
-    const quiz = payload.type === "quiz" ? normalizeQuizPayload(payload.quiz_payload) : null;
+    let quiz = null;
+    if (payload.type === "quiz") {
+      quiz = file ? await buildTecaiQuizFromDocx(file) : normalizeQuizPayload(payload.quiz_payload);
+    }
     validateContentState({
       contentType: payload.type,
       description: payload.description,
@@ -212,7 +280,9 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
   const nextDescription = payload.description ?? content.description;
   const nextQuiz =
     nextType === "quiz"
-      ? normalizeQuizPayload(payload.quiz_payload !== undefined ? payload.quiz_payload : content.profile?.quiz || null)
+      ? file
+        ? await buildTecaiQuizFromDocx(file)
+        : normalizeQuizPayload(payload.quiz_payload !== undefined ? payload.quiz_payload : content.profile?.quiz || null)
       : null;
 
   try {
@@ -270,4 +340,11 @@ const deleteContent = async (id, tenant, currentUser) => {
   await Content.findByIdAndDelete(id);
 };
 
-module.exports = { createContent, listModuleContents, updateContent, deleteContent };
+module.exports = {
+  createContent,
+  previewQuiz,
+  getTecaiExamData,
+  listModuleContents,
+  updateContent,
+  deleteContent
+};

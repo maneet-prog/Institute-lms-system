@@ -2,6 +2,7 @@
 
 import { Content, StudentWorkspaceContent } from "@/types/lms";
 
+import { Button } from "@/components/ui/Button";
 import { QuizContent } from "@/components/content/QuizContent";
 
 function getUrl(content: Content | StudentWorkspaceContent) {
@@ -66,6 +67,45 @@ export function ContentRenderer({ content }: { content: Content | StudentWorkspa
   }
 
   if (content.type === "quiz") {
+    if (content.quiz?.renderer?.kind === "tecai_reading") {
+      const submission = "submission" in content ? content.submission : null;
+      const attemptLimit = content.quiz.attempt_limit ?? 999;
+      const attemptsUsed = submission?.attempts.length ?? 0;
+      const canStart = !("submission" in content) || attemptsUsed < attemptLimit;
+
+      return (
+        <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">TECAI Reading Exam</p>
+              <p className="mt-1 text-sm text-slate-600">
+                Opens the exact standalone exam renderer in a new browser tab.
+              </p>
+            </div>
+            <Button
+              type="button"
+              disabled={!canStart}
+              onClick={() => window.open(`/exam/${content.content_id}?autostart=1`, "_blank", "noopener,noreferrer")}
+            >
+              {canStart ? "Start Exam" : "Attempt Limit Reached"}
+            </Button>
+          </div>
+
+          {"submission" in content ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+              <p>
+                Attempts used: {attemptsUsed}/{attemptLimit}
+              </p>
+              {submission?.response_text ? (
+                <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                  {submission.response_text}
+                </pre>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      );
+    }
     return <QuizContent content={content} />;
   }
 

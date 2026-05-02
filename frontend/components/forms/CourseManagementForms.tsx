@@ -8,18 +8,14 @@ import {
   useCreateCourseMutation,
   useCreateModuleMutation,
   useCreateSubCourseMutation,
-  useModulesQuery
+  useModulesQuery,
+  useQuizPreviewMutation
 } from "@/hooks/useLmsQueries";
 import { Button } from "@/components/ui/Button";
-import {
-  createEmptyQuizDraft,
-  normalizeQuizDraft,
-  QuizBuilder,
-  type QuizDraft
-} from "@/components/content/QuizBuilder";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+import { saveTecaiPreviewContent } from "@/utils/tecaiPreview";
 
 type CourseFormMode = "course" | "subcourse" | "module" | "content";
 
@@ -50,6 +46,7 @@ export function CourseManagementForms({
   const createSubcourse = useCreateSubCourseMutation();
   const createModule = useCreateModuleMutation();
   const addContent = useAddContentMutation();
+  const previewQuiz = useQuizPreviewMutation();
 
   const [course, setCourse] = useState({
     course_name: "",
@@ -82,7 +79,6 @@ export function CourseManagementForms({
     instructions: "",
     downloadable: false,
     response_type: "",
-    quiz: createEmptyQuizDraft() as QuizDraft,
     file: null as File | null
   });
 
@@ -97,15 +93,39 @@ export function CourseManagementForms({
   const { data: modules = [] } = useModulesQuery(
     content.subcourse_id
       ? {
-          course_id: content.course_id,
-          subcourse_id: content.subcourse_id,
-          institute_id: instituteId
-        }
+        course_id: content.course_id,
+        subcourse_id: content.subcourse_id,
+        institute_id: instituteId
+      }
       : undefined,
     { enabled: Boolean(content.course_id && content.subcourse_id) }
   );
 
   const allowsFileUpload = ["video", "audio", "pdf", "document"].includes(content.type);
+  const quizPreviewContent =
+    content.type === "quiz" && previewQuiz.data
+      ? {
+        content_id: "preview-quiz",
+        institute_id: instituteId ?? "",
+        module_id: content.module_id,
+        batch_id: content.batch_id,
+        title: content.title || "Generated quiz preview",
+        type: "quiz",
+        description: null,
+        file_url: null,
+        external_url: null,
+        resolved_url: null,
+        order_index: content.order_index,
+        category: content.category,
+        body_text: null,
+        instructions: content.instructions,
+        downloadable: false,
+        response_type: content.response_type,
+        quiz: previewQuiz.data,
+        url: null,
+        duration: content.duration
+      }
+      : null;
   const contentValidationMessage = (() => {
     if (!content.batch_id || !content.course_id || !content.subcourse_id || !content.module_id || !content.title.trim()) {
       return null;
@@ -114,20 +134,8 @@ export function CourseManagementForms({
       return "Add a description or external URL for text content.";
     }
     if (content.type === "quiz") {
-      if (!content.quiz.questions.length) {
-        return "Add at least one quiz question.";
-      }
-      const hasIncompleteQuestion = content.quiz.questions.some((question) => {
-        if (!question.prompt.trim()) {
-          return true;
-        }
-        if (question.type === "mcq") {
-          return question.options.some((option) => !option.text.trim()) || !question.correct_option_id;
-        }
-        return false;
-      });
-      if (hasIncompleteQuestion) {
-        return "Complete each quiz question, option, and correct answer before saving.";
+      if (!content.file) {
+        return "Upload a DOCX file to generate the quiz renderer.";
       }
     }
     if (allowsFileUpload && !content.file && !content.external_url.trim()) {
@@ -329,7 +337,6 @@ export function CourseManagementForms({
             downloadable: content.downloadable,
             response_type: content.response_type,
             institute_id: instituteId,
-            quiz_payload: content.type === "quiz" ? JSON.stringify(content.quiz) : undefined,
             duration: content.duration,
             file: content.file
           },
@@ -345,9 +352,9 @@ export function CourseManagementForms({
                 instructions: "",
                 downloadable: false,
                 response_type: "",
-                quiz: createEmptyQuizDraft(),
                 file: null
               }));
+              previewQuiz.reset();
               onSuccess?.();
             }
           }
@@ -420,14 +427,14 @@ export function CourseManagementForms({
               { label: "Quiz", value: "quiz" }
             ]}
             value={content.type}
-            onChange={(e) =>
+            onChange={(e) => {
+              previewQuiz.reset();
               setContent((prev) => ({
                 ...prev,
                 type: e.target.value,
-                file: ["video", "audio", "pdf", "document"].includes(e.target.value) ? prev.file : null,
-                quiz: e.target.value === "quiz" ? normalizeQuizDraft(prev.quiz) : prev.quiz
-              }))
-            }
+                file: ["video", "audio", "pdf", "document", "quiz"].includes(e.target.value) ? prev.file : null
+              }));
+            }}
             required
             disabled={addContent.isPending}
           />
@@ -453,68 +460,127 @@ export function CourseManagementForms({
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <p className="mb-3 text-sm font-semibold text-slate-900">Delivery</p>
-        <div className="grid gap-3 md:grid-cols-2">
-          <Textarea
-            className="md:col-span-2"
-            label="Description / HTML Notes"
-            value={content.description}
-            onChange={(e) => setContent((prev) => ({ ...prev, description: e.target.value }))}
-            required={content.type === "text"}
-            disabled={addContent.isPending}
-          />
-          <Input
-            label="External URL"
-            type="url"
-            value={content.external_url}
-            onChange={(e) => setContent((prev) => ({ ...prev, external_url: e.target.value }))}
-            disabled={addContent.isPending}
-          />
-          <div className="space-y-1">
-            <span className="text-sm font-medium text-slate-700">Upload File</span>
+      {content.type === "quiz" ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">DOCX Quiz Generator</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Upload the TECAI DOCX template and generate a preview of the rendered reading test before saving.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                if (content.file) {
+                  previewQuiz.mutate(content.file);
+                }
+              }}
+              disabled={!content.file || previewQuiz.isPending}
+            >
+              {previewQuiz.isPending ? "Generating Preview..." : "Generate Preview"}
+            </Button>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <span className="text-sm font-medium text-slate-700">Upload Quiz Source (DOCX)</span>
             <input
               className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
               type="file"
-              accept={
-                content.type === "video"
-                  ? "video/*"
-                  : content.type === "audio"
-                    ? "audio/*"
-                    : content.type === "pdf"
-                      ? ".pdf,application/pdf"
-                      : content.type === "document"
-                        ? ".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx"
-                        : undefined
-              }
-              disabled={!allowsFileUpload || addContent.isPending}
-              onChange={(e) => setContent((prev) => ({ ...prev, file: e.target.files?.[0] ?? null }))}
+              accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={(e) => {
+                previewQuiz.reset();
+                setContent((prev) => ({ ...prev, file: e.target.files?.[0] ?? null }));
+              }}
             />
             <p className="text-xs text-slate-500">
-              {allowsFileUpload
-                ? "Use a local file or an external URL."
-                : "File uploads are disabled for text and quiz content."}
+              The uploaded document is parsed with the same TECAI marker logic from your standalone HTML test renderer.
             </p>
           </div>
-          <Textarea
-            className="md:col-span-2"
-            label="Instructions / Prompt"
-            value={content.instructions}
-            onChange={(e) => setContent((prev) => ({ ...prev, instructions: e.target.value }))}
-            disabled={addContent.isPending}
-          />
-        </div>
-      </div>
 
-      {content.type === "quiz" ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="mb-3 text-sm font-semibold text-slate-900">Quiz Builder</p>
-          <QuizBuilder
-            value={content.quiz}
-            onChange={(quiz) => setContent((prev) => ({ ...prev, quiz }))}
-          />
+          {previewQuiz.error ? (
+            <p className="mt-3 text-sm text-rose-700">
+              {(previewQuiz.error as Error).message || "Unable to generate quiz preview."}
+            </p>
+          ) : null}
+
+          {quizPreviewContent ? (
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm text-slate-600">
+                Preview data is ready. Open it in a new tab to inspect the exact `testing.html` rendering and drag-drop flow.
+              </p>
+              <Button
+                type="button"
+                className="mt-3"
+                onClick={() => {
+                  const previewKey = saveTecaiPreviewContent(quizPreviewContent);
+                  if (previewKey) {
+                    window.open(`/exam/preview?preview_key=${encodeURIComponent(previewKey)}`, "_blank", "noopener,noreferrer");
+                  }
+                }}
+              >
+                Open Exact Preview
+              </Button>
+            </div>
+          ) : null}
         </div>
-      ) : null}
+      ) :
+        (
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="mb-3 text-sm font-semibold text-slate-900">Delivery</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Textarea
+                className="md:col-span-2"
+                label="Description / HTML Notes"
+                value={content.description}
+                onChange={(e) => setContent((prev) => ({ ...prev, description: e.target.value }))}
+                required={content.type === "text"}
+                disabled={addContent.isPending}
+              />
+              <Input
+                label="External URL"
+                type="url"
+                value={content.external_url}
+                onChange={(e) => setContent((prev) => ({ ...prev, external_url: e.target.value }))}
+                disabled={addContent.isPending}
+              />
+              <div className="space-y-1">
+                <span className="text-sm font-medium text-slate-700">Upload File</span>
+                <input
+                  className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                  type="file"
+                  accept={
+                    content.type === "video"
+                      ? "video/*"
+                      : content.type === "audio"
+                        ? "audio/*"
+                        : content.type === "pdf"
+                          ? ".pdf,application/pdf"
+                          : content.type === "document"
+                            ? ".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx"
+                            : undefined
+                  }
+                  disabled={!allowsFileUpload || addContent.isPending}
+                  onChange={(e) => setContent((prev) => ({ ...prev, file: e.target.files?.[0] ?? null }))}
+                />
+                <p className="text-xs text-slate-500">
+                  {allowsFileUpload
+                    ? "Use a local file or an external URL."
+                    : "File uploads are disabled for text content and use a separate DOCX input for quiz generation."}
+                </p>
+              </div>
+              <Textarea
+                className="md:col-span-2"
+                label="Instructions / Prompt"
+                value={content.instructions}
+                onChange={(e) => setContent((prev) => ({ ...prev, instructions: e.target.value }))}
+                disabled={addContent.isPending}
+              />
+            </div>
+          </div>
+        )
+      }
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <p className="mb-3 text-sm font-semibold text-slate-900">Learner Settings</p>

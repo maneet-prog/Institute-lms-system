@@ -17,29 +17,29 @@ export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       title: "Management",
       items: [
         {
-          label: "Institute Info",
-          href: "/dashboard/admin/institutes",
-          description: "Create and review institute records"
-        },
-        {
           label: "Courses & SubCourses",
           href: "/dashboard/admin/courses",
-          description: "Manage course hierarchy and content"
+          description: "Manage the course hierarchy for the institute"
         },
         {
-          label: "Batches",
+          label: "Batches & Materials",
           href: "/dashboard/admin/batches",
-          description: "Manage institute delivery groups"
+          description: "Manage delivery groups and batch content"
         },
         {
-          label: "Users Info",
+          label: "Students",
           href: "/dashboard/admin/users",
-          description: "Approve users and assign roles"
+          description: "Manage student approvals and access"
         },
         {
-          label: "Teachers Info",
+          label: "Teachers",
           href: "/dashboard/admin/teachers",
           description: "Manage teacher accounts"
+        },
+        {
+          label: "Submissions",
+          href: "/dashboard/admin/submissions",
+          description: "Review learner attempts and results"
         },
         {
           label: "Notifications",
@@ -58,24 +58,24 @@ export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       title: "Management",
       items: [
         {
-          label: "Users Info",
+          label: "Students",
           href: "/dashboard/institute-admin/users",
-          description: "Manage approvals and enrollment"
+          description: "Manage student approvals and enrollment"
         },
         {
-          label: "Teachers Info",
+          label: "Teachers",
           href: "/dashboard/institute-admin/teachers",
           description: "Manage teacher accounts"
         },
         {
-          label: "Courses & SubCourses",
-          href: "/dashboard/institute-admin/courses",
-          description: "Create academic structure"
+          label: "Batches & Materials",
+          href: "/dashboard/institute-admin/batches",
+          description: "Organize delivery groups and course materials"
         },
         {
-          label: "Batches",
-          href: "/dashboard/institute-admin/batches",
-          description: "Organize delivery groups"
+          label: "Submissions",
+          href: "/dashboard/institute-admin/submissions",
+          description: "Review learner attempts and results"
         }
       ]
     },

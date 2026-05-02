@@ -27,6 +27,8 @@ import {
   getCoursesByInstitute,
   getModuleContents,
   getModules,
+  getTecaiExam,
+  previewGeneratedQuiz,
   getPublicCourses,
   getPublicSubCourses,
   getSubCourses,
@@ -122,6 +124,14 @@ export function useModuleContentsQuery(moduleId?: string, batchId?: string) {
     queryKey: ["module-contents", batchId ?? "none", moduleId ?? "none"],
     queryFn: () => getModuleContents(moduleId as string, batchId as string),
     enabled: Boolean(moduleId && batchId)
+  });
+}
+
+export function useTecaiExamQuery(contentId?: string) {
+  return useQuery({
+    queryKey: ["tecai-exam", contentId ?? "none"],
+    queryFn: () => getTecaiExam(contentId as string),
+    enabled: Boolean(contentId)
   });
 }
 
@@ -378,6 +388,12 @@ export function useAddContentMutation() {
       queryClient.invalidateQueries({ queryKey: ["student-batch-workspace"] });
       pushToast("Content added successfully.", "success");
     }
+  });
+}
+
+export function useQuizPreviewMutation() {
+  return useMutation({
+    mutationFn: previewGeneratedQuiz
   });
 }
 

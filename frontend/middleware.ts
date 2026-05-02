@@ -12,7 +12,7 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get("lms_token")?.value;
   const role = request.cookies.get("lms_role")?.value;
 
-  if (pathname.startsWith("/dashboard")) {
+  if (pathname.startsWith("/dashboard") || pathname.startsWith("/exam")) {
     if (!token) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
@@ -41,5 +41,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login", "/register"]
+  matcher: ["/dashboard/:path*", "/exam/:path*", "/login", "/register"]
 };

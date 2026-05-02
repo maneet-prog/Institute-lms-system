@@ -9,7 +9,8 @@ import {
   StudentBatchWorkspace,
   StudentModuleBundle,
   StudentSubmission,
-  SubCourse
+  SubCourse,
+  TecaiExamData
 } from "@/types/lms";
 
 export async function getCourses(): Promise<Course[]> {
@@ -217,6 +218,18 @@ export async function addContent(payload: {
   file?: File | null;
 }): Promise<Content> {
   const { data } = await api.post<Content>("/content", buildContentFormData(payload));
+  return data;
+}
+
+export async function previewGeneratedQuiz(file: File): Promise<NonNullable<Content["quiz"]>> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<NonNullable<Content["quiz"]>>("/content/quiz-preview", formData);
+  return data;
+}
+
+export async function getTecaiExam(contentId: string): Promise<TecaiExamData> {
+  const { data } = await api.get<TecaiExamData>(`/content/${contentId}/tecai-exam`);
   return data;
 }
 

@@ -68,6 +68,22 @@ export interface Module {
   active: boolean;
 }
 
+export interface QuizOption {
+  option_id: string;
+  text: string;
+}
+
+export interface TecaiParagraph {
+  html: string;
+  text: string;
+}
+
+export interface TecaiQuizRenderer {
+  kind: "tecai_reading";
+  timer_seconds: number;
+  paragraphs: TecaiParagraph[];
+}
+
 export interface Content {
   content_id: string;
   institute_id: string;
@@ -101,6 +117,7 @@ export interface Content {
       reference_answer?: string | null;
       max_marks: number;
     }>;
+    renderer?: TecaiQuizRenderer | null;
   } | null;
   url?: string | null;
   duration: number;
@@ -211,6 +228,12 @@ export interface StudentSubmission {
 }
 
 export interface StudentWorkspaceContent extends Content {
+  submission?: StudentSubmission | null;
+}
+
+export interface TecaiExamData {
+  content: Content;
+  renderer: TecaiQuizRenderer;
   submission?: StudentSubmission | null;
 }
 

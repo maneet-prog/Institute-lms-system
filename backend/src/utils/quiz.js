@@ -1,6 +1,8 @@
 const AppError = require("./AppError");
 
 const ensureArray = (value) => (Array.isArray(value) ? value : []);
+const isTecaiRenderer = (renderer) =>
+  renderer?.kind === "tecai_reading" && Array.isArray(renderer.paragraphs);
 
 const normalizeQuestion = (question, index) => {
   const questionId = String(
@@ -45,6 +47,18 @@ const normalizeQuizPayload = (raw) => {
   }
 
   const questions = ensureArray(parsed.questions).map(normalizeQuestion);
+  const renderer = parsed.renderer || null;
+  const attemptLimit = Math.max(1, Number(parsed.attempt_limit || parsed.attemptLimit || 999) || 999);
+
+  if (!questions.length && isTecaiRenderer(renderer)) {
+    return {
+      mode: parsed.mode || "written",
+      attemptLimit,
+      questions: [],
+      renderer
+    };
+  }
+
   if (!questions.length) {
     return null;
   }
@@ -56,8 +70,9 @@ const normalizeQuizPayload = (raw) => {
     mode:
       parsed.mode ||
       (hasWritten && hasMcq ? "mixed" : hasWritten ? "written" : "mcq"),
-    attemptLimit: Math.max(1, Number(parsed.attempt_limit || parsed.attemptLimit || 1) || 1),
-    questions
+    attemptLimit,
+    questions,
+    renderer
   };
 };
 
@@ -75,6 +90,10 @@ const resolveQuizFromContent = (content) => {
 };
 
 const validateQuizDefinition = (quiz) => {
+  if (isTecaiRenderer(quiz?.renderer)) {
+    return;
+  }
+
   if (!quiz || !quiz.questions?.length) {
     throw new AppError("Quiz content requires at least one question.", 400);
   }

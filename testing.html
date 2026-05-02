@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>TEC Reading Module v1.10</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Arial;
+            height: 100vh;
+            overflow: hidden;
+            /* ❌ NO PAGE SCROLL */
+            background: #f5f7fb;
+        }
+
+        /* HEADER */
+        header {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            height: 60px;
+            background: #0b1f3a;
+            color: white;
+            padding: 10px 20px;
+            z-index: 1000;
+        }
+
+        header h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        header h4 {
+            margin: 2px 0 0;
+            font-size: 13px;
+            opacity: 0.8;
+        }
+
+        /* CONTROLS */
+        .controls {
+            position: fixed;
+            top: 60px;
+            width: 100%;
+            height: 55px;
+            background: white;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 15px;
+            border-bottom: 1px solid #ddd;
+            z-index: 999;
+        }
+
+        button {
+            background: #0b1f3a;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #163d6b;
+        }
+
+        input[type="file"] {
+            padding: 4px;
+        }
+
+        .timer {
+            margin-left: auto;
+            font-weight: bold;
+            color: #e63946;
+        }
+
+        /* MAIN CONTENT AREA */
+        .container {
+            position: fixed;
+            top: 115px;
+            /* header + controls */
+            bottom: 60px;
+            /* nav height */
+            width: 100%;
+            display: flex;
+        }
+
+        .left,
+        .right {
+            width: 50%;
+            padding: 15px;
+            overflow-y: auto;
+            /* ✅ INTERNAL SCROLL ONLY */
+        }
+
+        .left {
+            background: white;
+            border-right: 1px solid #ddd;
+        }
+
+        .right {
+            background: #fafbff;
+        }
+
+        /* QUESTIONS */
+        .right div[id^="q"] {
+            background: white;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+
+        /* DRAG */
+        .drag-container {
+            border: 2px dashed #bbb;
+            padding: 10px;
+            margin: 10px 0;
+            min-height: 40px;
+            border-radius: 6px;
+        }
+
+        .draggable {
+            display: inline-block;
+            padding: 5px 10px;
+            margin: 5px;
+            background: #0b1f3a;
+            color: white;
+            border-radius: 5px;
+            cursor: grab;
+        }
+
+        .dropzone {
+            display: inline-block;
+            min-width: 120px;
+            min-height: 25px;
+            border-bottom: 2px solid #000;
+            margin: 0 5px;
+        }
+
+        /* NAVIGATION */
+        .question-nav {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            height: 60px;
+            background: white;
+            border-top: 1px solid #ddd;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+            padding: 5px;
+            overflow-x: auto;
+        }
+
+        .question-nav button {
+            width: 35px;
+            height: 35px;
+            border-radius: 6px;
+            background: #edf1f7;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .question-nav button:hover {
+            background: #0b1f3a;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h2>Tajinder's English Classes</h2>
+        <h4>Reading Module</h4>
+    </header>
+
+    <div class="controls">
+        <button onclick="setName()">Add Student Name</button>
+        <input type="file" id="fileInput">
+        <button onclick="startTest()">Start</button>
+        <button onclick="submitTest()">Submit</button>
+        <span class="timer" id="timer">60:00</span>
+    </div>
+
+    <div class="container">
+        <div class="left" id="leftPanel"></div>
+        <div class="right" id="rightPanel"></div>
+    </div>
+
+    <div class="question-nav" id="nav"></div>
+
+    <script>
+        let studentName = "Student";
+        let qNum = 1;
+        let type4Answers = {};
+        let renderedSets = new Set();
+        let totalSeconds = 3600;
+        let timerInterval;
+
+        function setName() {
+            let name = prompt("Enter student name:");
+            if (name) studentName = name;
+        }
+
+        async function startTest() {
+            const file = document.getElementById("fileInput").files[0];
+            if (!file) return alert("Upload DOCX");
+
+            const zip = await JSZip.loadAsync(await file.arrayBuffer());
+            const xml = await zip.file("word/document.xml").async("string");
+
+            const paragraphs = getParagraphs(xml);
+            process(paragraphs);
+            startTimer();
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                totalSeconds--;
+
+                let m = Math.floor(totalSeconds / 60);
+                let s = totalSeconds % 60;
+
+                document.getElementById("timer").innerText = `${m}:${s < 10 ? '0' + s : '' + s}`;
+
+                if (totalSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    downloadAnswers();
+                }
+            }, 1000);
+        }
+
+        function getParagraphs(xml) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(xml, "application/xml");
+            const nodes = doc.getElementsByTagName("w:p");
+
+            let arr = [];
+            for (let p of nodes) {
+                let html = "", text = "";
+                let runs = p.getElementsByTagName("w:r");
+
+                for (let r of runs) {
+                    let t = r.getElementsByTagName("w:t")[0];
+                    if (!t) continue;
+
+                    let val = t.textContent;
+                    text += val;
+
+                    if (r.getElementsByTagName("w:b").length) val = `<b>${val}</b>`;
+                    if (r.getElementsByTagName("w:i").length) val = `<i>${val}</i>`;
+                    if (r.getElementsByTagName("w:u").length) val = `<u>${val}</u>`;
+
+                    html += val;
+                }
+                arr.push({ html, text: text.replace(/\s+/g, " ").trim() });
+            }
+            return arr;
+        }
+
+        function process(paragraphs) {
+
+            let inBlock = false;
+            let rightHTML = "", leftHTML = "";
+            qNum = 1;
+            type4Answers = {};
+            renderedSets = new Set();
+
+            const answerRegex = /\[TECAI\s*TYPE\s*4\s*ANSWER\s*SET\s*(\d+)\]/i;
+            const optionRegex = /\[TECAI\s*TYPE\s*4\s*OPTIONS\s*START\s*SET\s*(\d+)\]/i;
+
+            // collect answers
+            paragraphs.forEach(p => {
+                let m = p.text.match(answerRegex);
+                if (m) {
+                    let id = m[1];
+                    let clean = p.text.replace(answerRegex, "").trim();
+                    if (!type4Answers[id]) type4Answers[id] = [];
+                    type4Answers[id].push(clean);
+                }
+            });
+
+            paragraphs.forEach(p => {
+                let txt = p.text;
+
+                if (txt.includes("[TECAI START]")) { inBlock = true; return; }
+                if (txt.includes("[TECAI END]")) { inBlock = false; return; }
+
+                if (inBlock) {
+
+                    if (txt.match(answerRegex)) return;
+
+                    let line = p.html;
+
+                    // OPTIONS
+                    let optMatch = txt.match(optionRegex);
+                    if (optMatch) {
+                        let id = optMatch[1];
+
+                        if (!renderedSets.has(id)) {
+                            rightHTML += `<div><b>Options:</b>
+          <div class="drag-container" data-set="${id}" id="set_${id}">`;
+
+                            type4Answers[id].forEach((it, i) => {
+                                rightHTML += `<div class="draggable" draggable="true"
+            data-set="${id}" id="drag_${id}_${i}">${it}</div>`;
+                            });
+
+                            rightHTML += `</div></div>`;
+                            renderedSets.add(id);
+                        }
+                        return;
+                    }
+
+                    // TYPE 1 (Radio Buttons)
+                    if (txt.includes("[TECAI Type 1]")) {
+                        let clean = line.replace(/\[TECAI Type 1\]/i, "");
+                        rightHTML += `<div id="q${qNum}">
+        <b>${qNum}.</b> ${clean}<br>
+        <label><input type="radio" name="q${qNum}" value="TRUE"> TRUE</label>
+        <label><input type="radio" name="q${qNum}" value="FALSE"> FALSE</label>
+        <label><input type="radio" name="q${qNum}" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>`;
+                        qNum++;
+                        return;
+                    }
+
+                    // TYPE 2
+                    if (txt.includes("[TECAI Type 2]")) {
+                        let clean = line.replace(/\[TECAI Type 2\]/i, "");
+                        rightHTML += `<div id="q${qNum}">
+        <b>${qNum}.</b> ${clean}<br>
+        <label><input type="radio" name="q${qNum}" value="YES"> YES</label>
+        <label><input type="radio" name="q${qNum}" value="NO"> NO</label>
+        <label><input type="radio" name="q${qNum}" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>`;
+                        qNum++;
+                        return;
+                    }
+
+                    // TYPE 3
+                    if (txt.includes("[TECAI Type 3]")) {
+                        let temp = document.createElement("div");
+                        temp.innerHTML = line;
+                        let parts = temp.textContent.split(/\[TECAI Type 3\]/i);
+                        let out = "";
+                        parts.forEach((t, i) => {
+                            out += t;
+                            if (i < parts.length - 1) {
+                                out += `<input name="q${qNum}_${i}" style="width:120px;">`;
+                            }
+                        });
+
+                        rightHTML += `<div id="q${qNum}"><b>${qNum}.</b> ${out}</div>`;
+                        qNum++;
+                        return;
+                    }
+
+                    // TYPE 4
+                    if (txt.match(/\[TECAI\s*TYPE\s*4\s*SET\s*\d+\]/i)) {
+                        let mod = line.replace(/\[TECAI\s*TYPE\s*4\s*SET\s*(\d+)\]/gi,
+                            (m, id) => `<span class="dropzone" data-set="${id}"></span>`
+                        );
+                        rightHTML += `<p id="q${qNum}">${mod}</p>`;
+                        qNum++;
+                        return;
+                    }
+
+                    // TYPE 6 (LONG PARAGRAPH - MULTI QUESTION)
+                    if (txt.includes("[TECAI Type 6]")) {
+
+                        let temp = document.createElement("div");
+                        temp.innerHTML = line;
+
+                        let parts = temp.textContent.split(/\[TECAI Type 6\]/i);
+
+                        let out = "";
+                        let startQ = qNum;
+
+                        parts.forEach((t, i) => {
+                            out += t;
+
+                            if (i < parts.length - 1) {
+
+                                out += `<b id="q${qNum}">${qNum}.</b> 
+            <input name="q${qNum}" style="width:120px; margin:0 5px;">`;
+
+                                qNum++;
+                            }
+                        });
+
+                        rightHTML += `<div id="q${startQ}">${out}</div>`;
+
+                        return;
+                    }
+
+
+                    rightHTML += `<p>${line}</p>`;
+                }
+                else {
+                    leftHTML += `<p>${p.html}</p>`;
+                }
+            });
+
+            document.getElementById("rightPanel").innerHTML = rightHTML;
+            document.getElementById("leftPanel").innerHTML = leftHTML;
+
+            createNav(qNum - 1);
+        }
+
+        /* DRAG (unchanged working version) */
+        document.addEventListener("dragstart", e => {
+            let el = e.target.closest(".draggable");
+            if (el) e.dataTransfer.setData("id", el.id);
+        });
+
+        document.addEventListener("dragover", e => {
+            if (e.target.closest(".dropzone") || e.target.closest(".drag-container")) {
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener("drop", e => {
+            e.preventDefault();
+
+            let el = document.getElementById(e.dataTransfer.getData("id"));
+            if (!el) return;
+
+            let drop = e.target.closest(".dropzone");
+            let container = e.target.closest(".drag-container");
+
+            let set = el.dataset.set;
+
+            if (drop) {
+                if (set !== drop.dataset.set) return alert("Wrong set");
+                if (drop.firstChild) {
+                    document.getElementById("set_" + set).appendChild(drop.firstChild);
+                }
+                drop.innerHTML = "";
+                drop.appendChild(el);
+            }
+            else if (container) {
+                if (set !== container.dataset.set) return alert("Wrong set");
+                container.appendChild(el);
+            }
+        });
+
+        /* NAV */
+        function createNav(n) {
+            let nav = "";
+            for (let i = 1; i <= n; i++) {
+                nav += `<button onclick="document.getElementById('q${i}').scrollIntoView()">${i}</button>`;
+            }
+            document.getElementById("nav").innerHTML = nav;
+        }
+
+        //download answers as text file
+        function downloadAnswers() {
+            const now = new Date().toLocaleString();
+
+            const content = `Name: ${studentName} 
+Date: ${now} 
+Answers: 
+      
+${collectAnswers()}
+
+Self Assessment:
+[ ] Confident
+[ ] Need Practice
+[ ] Time Management Issue
+`;
+
+            const blob = new Blob([content], { type: "text/plain" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `${studentName}_${Date.now()}.txt`;
+            a.click();
+        }
+
+        // Collect answers from all question types
+        function collectAnswers() {
+            let data = [];
+
+            for (let i = 1; i < qNum; i++) {
+
+                let r = document.querySelector(`input[name="q${i}"]:checked`);
+                let textInputs = document.querySelectorAll(`
+  input[name="q${i}"]:not([type="radio"]),
+  input[name^="q${i}_"]:not([type="radio"])
+`);
+
+                let qDiv = document.getElementById(`q${i}`);
+                let drops = qDiv ? qDiv.querySelectorAll(".dropzone") : [];
+
+                // TYPE 1
+                if (r != null) {
+                    data.push(`${i}. ${r.value}`);
+                }
+
+                // TYPE 3
+                else if (textInputs.length > 0) {
+                    let values = [];
+                    textInputs.forEach(inp => {
+                        values.push(inp.value.trim() || " ");
+                    });
+                    data.push(`${i}. ${values.join(" | ")}`);
+                }
+
+                // TYPE 4
+                else if (drops.length > 0) {
+                    let values = [];
+
+                    drops.forEach(d => {
+                        let dragged = d.querySelector(".draggable");
+                        values.push(dragged ? dragged.innerText.trim() : " ");
+                    });
+
+                    data.push(`${i}. ${values.join(" | ")}`);
+                }
+
+                // TYPE 5 (EMPTY)
+                else {
+                    data.push(`${i}. `);
+                }
+            }
+
+            return data.join("\n");
+        }
+
+
+        /* SUBMIT */
+        function submitTest() {
+            if (confirm("Are you sure you want to submit?")) {
+                downloadAnswers();
+                // alert("Submitted!");
+                // location.reload();
+            }
+        }
+    </script>
+
+</body>
+
+</html>

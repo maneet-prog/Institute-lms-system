@@ -6,20 +6,16 @@ import { Content } from "@/types/lms";
 import {
   useDeleteContentMutation,
   useModuleContentsQuery,
+  useQuizPreviewMutation,
   useUpdateContentMutation
 } from "@/hooks/useLmsQueries";
-import {
-  createEmptyQuizDraft,
-  normalizeQuizDraft,
-  QuizBuilder,
-  type QuizDraft
-} from "@/components/content/QuizBuilder";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+import { saveTecaiPreviewContent } from "@/utils/tecaiPreview";
 
 type EditFormState = {
   title: string;
@@ -31,8 +27,8 @@ type EditFormState = {
   instructions: string;
   downloadable: boolean;
   response_type: string;
-  quiz: QuizDraft;
   duration: number;
+  attempt_limit: number;
   replace_file: boolean;
   file: File | null;
 };
@@ -47,8 +43,8 @@ const buildInitialForm = (content: Content): EditFormState => ({
   instructions: content.instructions ?? "",
   downloadable: Boolean(content.downloadable),
   response_type: content.response_type ?? "",
-  quiz: content.quiz ? normalizeQuizDraft(content.quiz) : createEmptyQuizDraft(),
   duration: content.duration,
+  attempt_limit: content.quiz?.attempt_limit ?? 0,
   replace_file: false,
   file: null
 });
@@ -65,8 +61,20 @@ export function ModuleContentList({
   const { data = [], isLoading } = useModuleContentsQuery(moduleId, batchId);
   const deleteContent = useDeleteContentMutation();
   const updateContent = useUpdateContentMutation();
+  const previewQuiz = useQuizPreviewMutation();
   const [selectedContent, setSelectedContent] = useState<Content | null>(null);
   const [form, setForm] = useState<EditFormState | null>(null);
+
+  const generatedPreviewContent =
+    selectedContent && form?.type === "quiz" && previewQuiz.data
+      ? {
+          ...selectedContent,
+          title: form.title || selectedContent.title,
+          instructions: form.instructions,
+          duration: form.duration,
+          quiz: previewQuiz.data
+        }
+      : null;
 
   if (isLoading) {
     return <p className="text-sm text-slate-500">Loading module content...</p>;
@@ -96,12 +104,21 @@ export function ModuleContentList({
                   <Button
                     variant="secondary"
                     onClick={() => {
+                      previewQuiz.reset();
                       setSelectedContent(content);
                       setForm(buildInitialForm(content));
                     }}
                   >
                     Edit
                   </Button>
+                  {content.type === "quiz" && content.quiz?.renderer?.kind === "tecai_reading" ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => window.open(`/exam/${content.content_id}`, "_blank", "noopener,noreferrer")}
+                    >
+                      Preview
+                    </Button>
+                  ) : null}
                   <Button
                     variant="secondary"
                     onClick={() =>
@@ -126,6 +143,7 @@ export function ModuleContentList({
         title="Update Content"
         open={Boolean(selectedContent && form)}
         onClose={() => {
+          previewQuiz.reset();
           setSelectedContent(null);
           setForm(null);
         }}
@@ -144,17 +162,17 @@ export function ModuleContentList({
                 { label: "Quiz", value: "quiz" }
               ]}
               value={form.type}
-              onChange={(e) =>
+              onChange={(e) => {
+                previewQuiz.reset();
                 setForm((prev) =>
                   prev
                     ? {
                         ...prev,
-                        type: e.target.value,
-                        quiz: e.target.value === "quiz" ? normalizeQuizDraft(prev.quiz) : prev.quiz
+                        type: e.target.value
                       }
                     : prev
-                )
-              }
+                );
+              }}
             />
             <Textarea
               label="Description"
@@ -184,10 +202,79 @@ export function ModuleContentList({
               onChange={(e) => setForm((prev) => (prev ? { ...prev, instructions: e.target.value } : prev))}
             />
             {form.type === "quiz" ? (
-              <QuizBuilder
-                value={form.quiz}
-                onChange={(quiz) => setForm((prev) => (prev ? { ...prev, quiz } : prev))}
-              />
+              <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">DOCX Quiz Generator</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Replace the quiz source document when you want to regenerate the reading renderer.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      if (form.file) {
+                        previewQuiz.mutate(form.file);
+                      }
+                    }}
+                    disabled={!form.file || previewQuiz.isPending}
+                  >
+                    {previewQuiz.isPending ? "Generating Preview..." : "Generate Preview"}
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-sm font-medium text-slate-700">Upload Quiz Source (DOCX)</span>
+                  <input
+                    className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                    type="file"
+                    accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    onChange={(e) => {
+                      previewQuiz.reset();
+                      setForm((prev) => (prev ? { ...prev, file: e.target.files?.[0] ?? null } : prev));
+                    }}
+                  />
+                </div>
+
+                {previewQuiz.error ? (
+                  <p className="text-sm text-rose-700">
+                    {(previewQuiz.error as Error).message || "Unable to generate quiz preview."}
+                  </p>
+                ) : null}
+
+                {generatedPreviewContent || selectedContent.quiz?.renderer?.kind === "tecai_reading" ? (
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <p className="text-sm text-slate-600">
+                      Open the exact `testing.html` preview in a new tab to verify layout, numbering, inputs, and drag-drop behavior.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {generatedPreviewContent ? (
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            const previewKey = saveTecaiPreviewContent(generatedPreviewContent);
+                            if (previewKey) {
+                              window.open(`/exam/preview?preview_key=${encodeURIComponent(previewKey)}`, "_blank", "noopener,noreferrer");
+                            }
+                          }}
+                        >
+                          Open Exact Preview
+                        </Button>
+                      ) : null}
+                      {selectedContent.quiz?.renderer?.kind === "tecai_reading" ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => window.open(`/exam/${selectedContent.content_id}`, "_blank", "noopener,noreferrer")}
+                        >
+                          Open Saved Exam
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             ) : null}
             <Input
               label="Display Order"
@@ -202,6 +289,13 @@ export function ModuleContentList({
               type="number"
               value={String(form.duration)}
               onChange={(e) => setForm((prev) => (prev ? { ...prev, duration: Number(e.target.value) } : prev))}
+            />
+            <Input
+              label="Attempt Limit (0 = Unlimited)"
+              type="number"
+              min="0"
+              value={String(form.attempt_limit)}
+              onChange={(e) => setForm((prev) => (prev ? { ...prev, attempt_limit: Math.max(0, Number(e.target.value) || 0) } : prev))}
             />
             {(form.category === "writing" || form.category === "speaking") ? (
               <Select
@@ -253,14 +347,15 @@ export function ModuleContentList({
                         instructions: form.instructions,
                         downloadable: form.downloadable,
                         response_type: form.response_type,
-                        quiz_payload: form.type === "quiz" ? JSON.stringify(form.quiz) : undefined,
                         duration: form.duration,
+                        attempt_limit: form.attempt_limit,
                         replace_file: form.replace_file,
                         file: form.file
                       }
                     },
                     {
                       onSuccess: () => {
+                        previewQuiz.reset();
                         setSelectedContent(null);
                         setForm(null);
                       }
@@ -284,6 +379,7 @@ export function ModuleContentList({
           </div>
         ) : null}
       </Modal>
+
     </>
   );
 }
