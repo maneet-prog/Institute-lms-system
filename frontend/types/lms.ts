@@ -74,6 +74,7 @@ export interface QuizOption {
 }
 
 export interface TecaiParagraph {
+  type?: "p" | "table";
   html: string;
   text: string;
 }

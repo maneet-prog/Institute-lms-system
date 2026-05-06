@@ -6,6 +6,7 @@ const TECAI_READING_KIND = "tecai_reading";
 const DEFAULT_TIMER_SECONDS = 3600;
 
 const normalizeParagraph = (paragraph) => ({
+  type: paragraph?.type === "table" ? "table" : "p",
   html: typeof paragraph?.html === "string" ? paragraph.html : "",
   text: typeof paragraph?.text === "string" ? paragraph.text : ""
 });
@@ -21,6 +22,37 @@ const sanitizeRenderer = (renderer) => {
       Number(renderer.timer_seconds || renderer.timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS,
     paragraphs: renderer.paragraphs.map(normalizeParagraph)
   };
+};
+
+const getDataUriMimeType = (path = "") => {
+  const normalized = path.toLowerCase();
+  if (normalized.endsWith(".png")) return "image/png";
+  if (normalized.endsWith(".jpg") || normalized.endsWith(".jpeg")) return "image/jpeg";
+  if (normalized.endsWith(".gif")) return "image/gif";
+  if (normalized.endsWith(".bmp")) return "image/bmp";
+  if (normalized.endsWith(".webp")) return "image/webp";
+  if (normalized.endsWith(".svg")) return "image/svg+xml";
+  return "application/octet-stream";
+};
+
+const parseTECAIInline = (text, state) => {
+  if (!text) return "";
+
+  let output = text;
+
+  output = output.replace(/\[TECAI\s*Type\s*6\]/gi, () => {
+    const currentQ = state.qNum++;
+    return `<b>${currentQ}.</b>
+        <input name="q${currentQ}" style="width:100px;margin:0 5px;">`;
+  });
+
+  output = output.replace(/\[\s*input\s*box\s*\]/gi, () => {
+    const currentQ = state.qNum++;
+    return `<b>${currentQ}.</b>
+        <input name="q${currentQ}" style="width:100px;margin:0 5px;">`;
+  });
+
+  return output;
 };
 
 const getParagraphs = (xml) => {
@@ -57,6 +89,125 @@ const getParagraphs = (xml) => {
   return paragraphs;
 };
 
+const getRelationships = async (zip) => {
+  const relsFile = zip.file("word/_rels/document.xml.rels");
+  if (!relsFile) {
+    return [];
+  }
+
+  const relsXml = await relsFile.async("text");
+  const relsDoc = new DOMParser().parseFromString(relsXml, "text/xml");
+  return Array.from(relsDoc.getElementsByTagName("Relationship"));
+};
+
+const renderTable = async (tblNode, zip, state, relationships) => {
+  let html = "<table border='1' style='border-collapse:collapse;width:100%'>";
+
+  const rows = Array.from(tblNode.getElementsByTagName("w:tr"));
+
+  for (const row of rows) {
+    html += "<tr>";
+
+    const cells = Array.from(row.getElementsByTagName("w:tc"));
+
+    for (const cell of cells) {
+      html += "<td style='padding:8px;'>";
+
+      const paragraphs = Array.from(cell.getElementsByTagName("w:p"));
+
+      for (const paragraph of paragraphs) {
+        const texts = Array.from(paragraph.getElementsByTagName("w:t"));
+
+        let fullText = "";
+
+        for (const textNode of texts) {
+          fullText += textNode.textContent || "";
+        }
+
+        fullText = fullText.replace(/\s+/g, " ").trim();
+
+        const parsed = parseTECAIInline(fullText, state);
+
+        html += `<div>${parsed}</div>`;
+      }
+
+      const drawings = Array.from(cell.getElementsByTagName("w:drawing"));
+
+      for (const drawing of drawings) {
+        const blip = drawing.getElementsByTagName("a:blip")[0];
+        if (!blip) continue;
+
+        const embed = blip.getAttribute("r:embed");
+        const relationship = relationships.find((item) => item.getAttribute("Id") === embed);
+
+        if (!relationship) continue;
+
+        const target = relationship.getAttribute("Target");
+        if (!target) continue;
+
+        const imgFile = zip.file(`word/${target}`);
+        if (!imgFile) continue;
+
+        const base64 = await imgFile.async("base64");
+        const mimeType = getDataUriMimeType(target);
+        const url = `data:${mimeType};base64,${base64}`;
+
+        html += `<br><img src="${url}" style="max-width:150px;">`;
+      }
+
+      html += "</td>";
+    }
+
+    html += "</tr>";
+  }
+
+  html += "</table><br>";
+  return html;
+};
+
+const parseDocument = async (xml, zip) => {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, "application/xml");
+  const bodyNode = doc.getElementsByTagName("w:body")[0];
+  const bodyChildren = bodyNode ? Array.from(bodyNode.childNodes || []) : [];
+  const relationships = await getRelationships(zip);
+  const state = { qNum: 1 };
+
+  const content = [];
+
+  for (const node of bodyChildren) {
+    if (node.nodeName === "w:p") {
+      let text = "";
+      let html = "";
+
+      const runs = Array.from(node.getElementsByTagName("w:r"));
+
+      for (const run of runs) {
+        const textNode = run.getElementsByTagName("w:t")[0];
+        if (!textNode) continue;
+
+        let value = textNode.textContent || "";
+        text += value;
+
+        if (run.getElementsByTagName("w:b").length) value = `<b>${value}</b>`;
+        if (run.getElementsByTagName("w:i").length) value = `<i>${value}</i>`;
+        if (run.getElementsByTagName("w:u").length) value = `<u>${value}</u>`;
+
+        html += value;
+      }
+
+      content.push({ type: "p", text: text.trim(), html });
+    }
+
+    if (node.nodeName === "w:tbl") {
+      const tableHtml = await renderTable(node, zip, state, relationships);
+      content.push({ type: "table", html: tableHtml, text: "" });
+    }
+  }
+
+  return content;
+};
+
 const buildTecaiQuizFromDocx = async (file) => {
   if (!file?.buffer) {
     throw new AppError("Upload a DOCX file to generate the TECAI exam.", 400);
@@ -69,7 +220,7 @@ const buildTecaiQuizFromDocx = async (file) => {
   }
 
   const xml = await documentFile.async("string");
-  const paragraphs = getParagraphs(xml);
+  const paragraphs = await parseDocument(xml, zip);
 
   return {
     mode: "written",

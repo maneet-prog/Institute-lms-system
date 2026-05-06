@@ -211,10 +211,10 @@ function buildTecaiExamHtml({
     </header>
 
     <div class="controls">
-        <span class="source-name" style="margin-right: 15px;">${escapeHtml(studentName)}</span>
+        <button onclick="setName()">Add Student Name</button>
         <input type="file" id="fileInput" disabled hidden>
-        <span class="source-name">${escapeHtml(sourceLabel)}</span>
-        <button onclick="startTest()" hidden disabled>Start</button>
+        <span class="source-name" style="margin-right: 15px;">${escapeHtml(sourceLabel)}</span>
+        <button onclick="startTest()">Start</button>
         <button onclick="submitTest()">Submit</button>
         <span class="timer" id="timer">60:00</span>
     </div>
@@ -239,13 +239,24 @@ function buildTecaiExamHtml({
         let totalSeconds = initialSeconds;
         let timerInterval;
 
+        function formatTime(total) {
+            let m = Math.floor(total / 60);
+            let s = total % 60;
+            return \`\${m}:\${s < 10 ? '0' + s : '' + s}\`;
+        }
+
+        function setName() {
+            let name = prompt("Enter student name:", studentName);
+            if (name) studentName = name;
+        }
+
         async function startTest() {
             const paragraphs = preloadedParagraphs;
             if (!paragraphs || !paragraphs.length) return alert("Exam data not found");
 
             clearInterval(timerInterval);
             totalSeconds = initialSeconds;
-            document.getElementById("timer").innerText = "60:00";
+            document.getElementById("timer").innerText = formatTime(totalSeconds);
 
             process(paragraphs);
             startTimer();
@@ -255,10 +266,7 @@ function buildTecaiExamHtml({
             timerInterval = setInterval(() => {
                 totalSeconds--;
 
-                let m = Math.floor(totalSeconds / 60);
-                let s = totalSeconds % 60;
-
-                document.getElementById("timer").innerText = \`\${m}:\${s < 10 ? '0' + s : '' + s}\`;
+                document.getElementById("timer").innerText = formatTime(totalSeconds);
 
                 if (totalSeconds <= 0) {
                     clearInterval(timerInterval);
@@ -267,8 +275,8 @@ function buildTecaiExamHtml({
             }, 1000);
         }
 
-        function process(paragraphs) {
-
+        function process(content) {
+            let currentSection = 0;
             let inBlock = false;
             let rightHTML = "", leftHTML = "";
             qNum = 1;
@@ -278,43 +286,69 @@ function buildTecaiExamHtml({
             const answerRegex = /\\[TECAI\\s*TYPE\\s*4\\s*ANSWER\\s*SET\\s*(\\d+)\\]/i;
             const optionRegex = /\\[TECAI\\s*TYPE\\s*4\\s*OPTIONS\\s*START\\s*SET\\s*(\\d+)\\]/i;
 
-            paragraphs.forEach(p => {
-                let m = p.text.match(answerRegex);
+            let tempSection = 0;
+
+            content.forEach(p => {
+                let txt = p.text || "";
+
+                if (txt.includes("[TECAI START]")) {
+                    tempSection++;
+                    return;
+                }
+                if (txt.includes("[TECAI END]")) return;
+
+                let m = txt.match(answerRegex);
                 if (m) {
                     let id = m[1];
-                    let clean = p.text.replace(answerRegex, "").trim();
-                    if (!type4Answers[id]) type4Answers[id] = [];
-                    type4Answers[id].push(clean);
+                    let sectionId = tempSection + "_" + id;
+
+                    let clean = txt.replace(answerRegex, "").trim();
+
+                    if (!type4Answers[sectionId]) {
+                        type4Answers[sectionId] = [];
+                    }
+
+                    type4Answers[sectionId].push(clean);
                 }
             });
 
-            paragraphs.forEach(p => {
-                let txt = p.text;
+            content.forEach(p => {
+                let txt = p.text || "";
 
-                if (txt.includes("[TECAI START]")) { inBlock = true; return; }
+                if (txt.includes("[TECAI START]")) { inBlock = true; currentSection++; return; }
                 if (txt.includes("[TECAI END]")) { inBlock = false; return; }
+
+                if (p.type === "table" || /^<table[\\s>]/i.test(p.html || "")) {
+                    if (inBlock) {
+                        rightHTML += p.html;
+                    } else {
+                        leftHTML += p.html;
+                    }
+                    return;
+                }
 
                 if (inBlock) {
 
                     if (txt.match(answerRegex)) return;
 
-                    let line = p.html;
+                    let line = p.html || "";
 
                     let optMatch = txt.match(optionRegex);
                     if (optMatch) {
                         let id = optMatch[1];
+                        let sectionId = currentSection + "_" + id;
 
-                        if (!renderedSets.has(id)) {
+                        if (!renderedSets.has(sectionId)) {
                             rightHTML += \`<div><b>Options:</b>
-          <div class="drag-container" data-set="\${id}" id="set_\${id}">\`;
+          <div class="drag-container" data-set="\${sectionId}" id="set_\${sectionId}">\`;
 
-                            type4Answers[id].forEach((it, i) => {
+                            (type4Answers[sectionId] || []).forEach((it, i) => {
                                 rightHTML += \`<div class="draggable" draggable="true"
-            data-set="\${id}" id="drag_\${id}_\${i}">\${it}</div>\`;
+            data-set="\${sectionId}" id="drag_\${sectionId}_\${i}">\${it}</div>\`;
                             });
 
                             rightHTML += \`</div></div>\`;
-                            renderedSets.add(id);
+                            renderedSets.add(sectionId);
                         }
                         return;
                     }
@@ -362,7 +396,7 @@ function buildTecaiExamHtml({
 
                     if (txt.match(/\\[TECAI\\s*TYPE\\s*4\\s*SET\\s*\\d+\\]/i)) {
                         let mod = line.replace(/\\[TECAI\\s*TYPE\\s*4\\s*SET\\s*(\\d+)\\]/gi,
-                            (m, id) => \`<span class="dropzone" data-set="\${id}"></span>\`
+                            (m, id) => \`<span class="dropzone" data-set="\${currentSection + "_" + id}"></span>\`
                         );
                         rightHTML += \`<p id="q\${qNum}"><b>\${qNum}.</b> \${mod}</p>\`;
                         qNum++;
@@ -377,20 +411,28 @@ function buildTecaiExamHtml({
 
                     if (txt.includes("[TECAI TYPE 5.1 OPTIONS]")) {
                         let opts = txt.replace(/\\[TECAI TYPE 5.1 OPTIONS\\]/i, "").split("/").map(o => o.trim());
+                        let targetQ = qNum;
+
                         opts.forEach(opt => {
-                            rightHTML += \`<label><input type="radio" name="q\${qNum}" value="\${opt}"> \${opt}</label><br>\`;
+                            rightHTML += \`<label><input type="radio" name="q\${targetQ}" value="\${opt}"> \${opt}</label><br>\`;
                         });
+
                         rightHTML += \`</div>\`;
-                        qNum++; return;
+                        qNum++;
+                        return;
                     }
 
                     if (txt.includes("[TECAI TYPE 5.2 OPTIONS]")) {
                         let opts = txt.replace(/\\[TECAI TYPE 5.2 OPTIONS\\]/i, "").split("/").map(o => o.trim());
+                        let targetQ = qNum;
+
                         opts.forEach(opt => {
-                            rightHTML += \`<label><input type="checkbox" name="q\${qNum}" value="\${opt}"> \${opt}</label><br>\`;
+                            rightHTML += \`<label><input type="checkbox" name="q\${targetQ}" value="\${opt}"> \${opt}</label><br>\`;
                         });
+
                         rightHTML += \`</div>\`;
-                        qNum++; return;
+                        qNum++;
+                        return;
                     }
 
                     if (txt.includes("[TECAI Type 6]")) {
@@ -556,6 +598,7 @@ Self Assessment:
         }
 
         window.addEventListener("load", () => {
+            document.getElementById("timer").innerText = formatTime(totalSeconds);
             if (autoStart) {
                 startTest();
             }
