@@ -364,7 +364,7 @@ function buildTecaiExamHtml({
                         let mod = line.replace(/\\[TECAI\\s*TYPE\\s*4\\s*SET\\s*(\\d+)\\]/gi,
                             (m, id) => \`<span class="dropzone" data-set="\${id}"></span>\`
                         );
-                        rightHTML += \`<p id="q\${qNum}">\${mod}</p>\`;
+                        rightHTML += \`<p id="q\${qNum}"><b>\${qNum}.</b> \${mod}</p>\`;
                         qNum++;
                         return;
                     }
@@ -514,7 +514,6 @@ Self Assessment:
         function collectAnswers() {
             let data = [];
             for (let i = 1; i < qNum; i++) {
-                // Selects both radio and checkbox values
                 let checkedInputs = document.querySelectorAll(\`input[name="q\${i}"]:checked\`);
                 
                 let textInputs = document.querySelectorAll(\`
@@ -528,7 +527,7 @@ Self Assessment:
                 if (checkedInputs.length > 0) {
                     let values = [];
                     checkedInputs.forEach(input => values.push(input.value));
-                    data.push(\`\${i}. \${values.join(" | ")}\`); // Join multi-selects with pipe
+                    data.push(\`\${i}. \${values.join(" | ")}\`);
                 }
                 else if (textInputs.length > 0) {
                     let values = [];
