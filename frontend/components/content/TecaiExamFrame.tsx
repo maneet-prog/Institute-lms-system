@@ -214,7 +214,7 @@ function buildTecaiExamHtml({
         <span class="source-name" style="margin-right: 15px;">${escapeHtml(studentName)}</span>
         <input type="file" id="fileInput" disabled hidden>
         <span class="source-name">${escapeHtml(sourceLabel)}</span>
-        <button onclick="startTest()">Start</button>
+        <button onclick="startTest()" hidden disabled>Start</button>
         <button onclick="submitTest()">Submit</button>
         <span class="timer" id="timer">60:00</span>
     </div>
@@ -369,6 +369,30 @@ function buildTecaiExamHtml({
                         return;
                     }
 
+                    if (txt.includes("[TECAI Type 5]")) {
+                        let clean = line.replace(/\\[TECAI Type 5\\]/i, "");
+                        rightHTML += \`<div id="q\${qNum}"><b>\${qNum}.</b> \${clean}<br>\`;
+                        return;
+                    }
+
+                    if (txt.includes("[TECAI TYPE 5.1 OPTIONS]")) {
+                        let opts = txt.replace(/\\[TECAI TYPE 5.1 OPTIONS\\]/i, "").split("/").map(o => o.trim());
+                        opts.forEach(opt => {
+                            rightHTML += \`<label><input type="radio" name="q\${qNum}" value="\${opt}"> \${opt}</label><br>\`;
+                        });
+                        rightHTML += \`</div>\`;
+                        qNum++; return;
+                    }
+
+                    if (txt.includes("[TECAI TYPE 5.2 OPTIONS]")) {
+                        let opts = txt.replace(/\\[TECAI TYPE 5.2 OPTIONS\\]/i, "").split("/").map(o => o.trim());
+                        opts.forEach(opt => {
+                            rightHTML += \`<label><input type="checkbox" name="q\${qNum}" value="\${opt}"> \${opt}</label><br>\`;
+                        });
+                        rightHTML += \`</div>\`;
+                        qNum++; return;
+                    }
+
                     if (txt.includes("[TECAI Type 6]")) {
 
                         let temp = document.createElement("div");
@@ -489,46 +513,40 @@ Self Assessment:
 
         function collectAnswers() {
             let data = [];
-
             for (let i = 1; i < qNum; i++) {
-
-                let r = document.querySelector(\`input[name="q\${i}"]:checked\`);
+                // Selects both radio and checkbox values
+                let checkedInputs = document.querySelectorAll(\`input[name="q\${i}"]:checked\`);
+                
                 let textInputs = document.querySelectorAll(\`
-  input[name="q\${i}"]:not([type="radio"]),
-  input[name^="q\${i}_"]:not([type="radio"])
-\`);
+                    input[name="q\${i}"]:not([type="radio"]):not([type="checkbox"]),
+                    input[name^="q\${i}_"]:not([type="radio"]):not([type="checkbox"])
+                \`);
 
                 let qDiv = document.getElementById(\`q\${i}\`);
                 let drops = qDiv ? qDiv.querySelectorAll(".dropzone") : [];
 
-                if (r != null) {
-                    data.push(\`\${i}. \${r.value}\`);
+                if (checkedInputs.length > 0) {
+                    let values = [];
+                    checkedInputs.forEach(input => values.push(input.value));
+                    data.push(\`\${i}. \${values.join(" | ")}\`); // Join multi-selects with pipe
                 }
-
                 else if (textInputs.length > 0) {
                     let values = [];
-                    textInputs.forEach(inp => {
-                        values.push(inp.value.trim() || " ");
-                    });
+                    textInputs.forEach(inp => values.push(inp.value.trim() || " "));
                     data.push(\`\${i}. \${values.join(" | ")}\`);
                 }
-
                 else if (drops.length > 0) {
                     let values = [];
-
                     drops.forEach(d => {
                         let dragged = d.querySelector(".draggable");
                         values.push(dragged ? dragged.innerText.trim() : " ");
                     });
-
                     data.push(\`\${i}. \${values.join(" | ")}\`);
                 }
-
                 else {
                     data.push(\`\${i}. \`);
                 }
             }
-
             return data.join("\\n");
         }
 

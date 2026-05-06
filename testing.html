@@ -6,6 +6,7 @@
     <title>TEC Reading Module v1.10</title>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
 
     <style>
         * {
@@ -195,8 +196,10 @@
     </div>
 
     <div class="container">
-        <div class="left" id="leftPanel"></div>
-        <div class="right" id="rightPanel"></div>
+        <div class="left" id="leftPanel">
+        </div>
+        <div class="right" id="rightPanel">
+        </div>
     </div>
 
     <div class="question-nav" id="nav"></div>
@@ -221,8 +224,9 @@
             const zip = await JSZip.loadAsync(await file.arrayBuffer());
             const xml = await zip.file("word/document.xml").async("string");
 
-            const paragraphs = getParagraphs(xml);
-            process(paragraphs);
+            const content = await parseDocument(xml, zip);
+
+            process(content);
             startTimer();
         }
 
@@ -270,8 +274,143 @@
             return arr;
         }
 
-        function process(paragraphs) {
+        async function parseDocument(xml, zip) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(xml, "application/xml");
 
+            const body = doc.getElementsByTagName("w:body")[0].childNodes;
+
+            let content = [];
+
+            for (let node of body) {
+
+                // PARAGRAPH
+                if (node.nodeName === "w:p") {
+                    let text = "";
+                    let html = "";
+
+                    const runs = node.getElementsByTagName("w:r");
+
+                    for (let r of runs) {
+                        let t = r.getElementsByTagName("w:t")[0];
+                        if (!t) continue;
+
+                        let val = t.textContent;
+                        text += val;
+
+                        if (r.getElementsByTagName("w:b").length) val = `<b>${val}</b>`;
+                        if (r.getElementsByTagName("w:i").length) val = `<i>${val}</i>`;
+                        if (r.getElementsByTagName("w:u").length) val = `<u>${val}</u>`;
+
+                        html += val;
+                    }
+
+                    content.push({ type: "p", text: text.trim(), html });
+                }
+
+                // TABLE
+                if (node.nodeName === "w:tbl") {
+                    const tableHTML = await renderTable(node, zip);
+                    content.push({ type: "table", html: tableHTML });
+                }
+            }
+
+            return content;
+        }
+
+        async function renderTable(tblNode, zip) {
+            let html = "<table border='1' style='border-collapse:collapse;width:100%'>";
+
+            const rows = tblNode.getElementsByTagName("w:tr");
+
+            for (let row of rows) {
+                html += "<tr>";
+
+                const cells = row.getElementsByTagName("w:tc");
+
+                for (let cell of cells) {
+                    html += "<td style='padding:8px;'>";
+
+                    const paragraphs = cell.getElementsByTagName("w:p");
+
+                    for (let p of paragraphs) {
+
+                        const texts = p.getElementsByTagName("w:t");
+
+                        let fullText = "";
+
+                        for (let t of texts) {
+                            fullText += t.textContent;
+                        }
+
+                        // IMPORTANT: normalize spaces
+                        fullText = fullText.replace(/\s+/g, " ").trim();
+
+                        // APPLY TECAI
+                        let parsed = parseTECAIInline(fullText);
+
+                        html += `<div>${parsed}</div>`;
+                    }
+
+                    // IMAGE
+                    const drawings = cell.getElementsByTagName("w:drawing");
+                    const relsXml = await zip.file("word/_rels/document.xml.rels").async("text");
+                    const relsDoc = new DOMParser().parseFromString(relsXml, "text/xml");
+                    const relationships = Array.from(relsDoc.getElementsByTagName("Relationship"));
+
+                    for (let d of drawings) {
+                        const blip = d.getElementsByTagName("a:blip")[0];
+                        if (!blip) continue;
+
+                        const embed = blip.getAttribute("r:embed");
+                        const relsDoc = new DOMParser().parseFromString(relsXml, "text/xml");
+
+                        const rel = relationships.find(r => r.getAttribute("Id") === embed);
+
+                        if (rel) {
+                            const target = rel.getAttribute("Target");
+                            const imgFile = "word/" + target;
+
+                            const blob = await zip.file(imgFile).async("blob");
+                            const url = URL.createObjectURL(blob);
+
+                            html += `<br><img src="${url}" style="max-width:150px;">`;
+                        }
+                    }
+
+                    html += "</td>";
+                }
+
+                html += "</tr>";
+            }
+
+            html += "</table><br>";
+            return html;
+        }
+
+        function parseTECAIInline(text) {
+
+            if (!text) return "";
+
+            let output = text;
+
+            // [TECAI Type 6]
+            output = output.replace(/\[TECAI\s*Type\s*6\]/gi, () => {
+                return `<b>${qNum++}.</b>
+        <input name="q${qNum - 1}" style="width:100px;margin:0 5px;">`;
+            });
+
+            // [ input box ]
+            output = output.replace(/\[\s*input\s*box\s*\]/gi, () => {
+                return `<b>${qNum++}.</b>
+        <input name="q${qNum - 1}" style="width:100px;margin:0 5px;">`;
+            });
+
+            return output;
+        }
+
+        function process(content) {
+            let currentSection = 0;
             let inBlock = false;
             let rightHTML = "", leftHTML = "";
             qNum = 1;
@@ -282,44 +421,70 @@
             const optionRegex = /\[TECAI\s*TYPE\s*4\s*OPTIONS\s*START\s*SET\s*(\d+)\]/i;
 
             // collect answers
-            paragraphs.forEach(p => {
-                let m = p.text.match(answerRegex);
+            let tempSection = 0;
+
+            content.forEach(p => {
+                let txt = p.text || "";
+
+                if (txt.includes("[TECAI START]")) {
+                    tempSection++;
+                    return;
+                }
+                if (txt.includes("[TECAI END]")) return;
+
+                let m = txt.match(answerRegex);
                 if (m) {
                     let id = m[1];
-                    let clean = p.text.replace(answerRegex, "").trim();
-                    if (!type4Answers[id]) type4Answers[id] = [];
-                    type4Answers[id].push(clean);
+                    let sectionId = tempSection + "_" + id;
+
+                    let clean = txt.replace(answerRegex, "").trim();
+
+                    if (!type4Answers[sectionId]) {
+                        type4Answers[sectionId] = [];
+                    }
+
+                    type4Answers[sectionId].push(clean);
                 }
             });
 
-            paragraphs.forEach(p => {
-                let txt = p.text;
+            content.forEach(p => {
+                let txt = p.text || "";
 
-                if (txt.includes("[TECAI START]")) { inBlock = true; return; }
+                if (txt.includes("[TECAI START]")) { inBlock = true; currentSection++; return; }
                 if (txt.includes("[TECAI END]")) { inBlock = false; return; }
+
+                if (p.type === "table") {
+                    if (inBlock) {
+                        rightHTML += p.html;
+                    } else {
+                        leftHTML += p.html;
+                    }
+                    return;
+                }
 
                 if (inBlock) {
 
                     if (txt.match(answerRegex)) return;
 
-                    let line = p.html;
+                    let line = p.html || "";
 
                     // OPTIONS
                     let optMatch = txt.match(optionRegex);
                     if (optMatch) {
                         let id = optMatch[1];
+                        let sectionId = currentSection + "_" + id;
 
-                        if (!renderedSets.has(id)) {
+                        if (!renderedSets.has(sectionId)) {
                             rightHTML += `<div><b>Options:</b>
-          <div class="drag-container" data-set="${id}" id="set_${id}">`;
+          <div class="drag-container" data-set="${sectionId}" id="set_${sectionId}">`;
 
-                            type4Answers[id].forEach((it, i) => {
+                            (type4Answers[sectionId] || []).forEach((it, i) => {
                                 rightHTML += `<div class="draggable" draggable="true"
-            data-set="${id}" id="drag_${id}_${i}">${it}</div>`;
+            data-set="${sectionId}" id="drag_${sectionId}_${i}">${it}</div>`;
                             });
 
                             rightHTML += `</div></div>`;
-                            renderedSets.add(id);
+                            renderedSets.add(sectionId);
                         }
                         return;
                     }
@@ -371,12 +536,46 @@
                     // TYPE 4
                     if (txt.match(/\[TECAI\s*TYPE\s*4\s*SET\s*\d+\]/i)) {
                         let mod = line.replace(/\[TECAI\s*TYPE\s*4\s*SET\s*(\d+)\]/gi,
-                            (m, id) => `<span class="dropzone" data-set="${id}"></span>`
+                            (m, id) => `<span class="dropzone" data-set="${currentSection + "_" + id}"></span>`
                         );
                         rightHTML += `<p id="q${qNum}">${mod}</p>`;
                         qNum++;
                         return;
                     }
+
+                    //Type 5
+                    if (txt.includes("[TECAI Type 5]")) {
+                        let clean = line.replace(/\[TECAI Type 5\]/i, "");
+                        rightHTML += `<div id="q${qNum}"><b>${qNum}.</b> ${clean}<br>`;
+                        return;
+                    }
+
+                    if (txt.includes("[TECAI TYPE 5.1 OPTIONS]")) {
+                        let opts = txt.replace(/\[TECAI TYPE 5.1 OPTIONS\]/i, "").split("/").map(o => o.trim());
+                        let targetQ = qNum;
+
+                        opts.forEach(opt => {
+                            rightHTML += `<label><input type="radio" name="q${targetQ}" value="${opt}"> ${opt}</label><br>`;
+                        });
+
+                        rightHTML += `</div>`;
+                        qNum++;
+                        return;
+                    }
+
+                    if (txt.includes("[TECAI TYPE 5.2 OPTIONS]")) {
+                        let opts = txt.replace(/\[TECAI TYPE 5.2 OPTIONS\]/i, "").split("/").map(o => o.trim());
+                        let targetQ = qNum;
+
+                        opts.forEach(opt => {
+                            rightHTML += `<label><input type="checkbox" name="q${targetQ}" value="${opt}"> ${opt}</label><br>`;
+                        });
+
+                        rightHTML += `</div>`;
+                        qNum++;
+                        return;
+                    }
+
 
                     // TYPE 6 (LONG PARAGRAPH - MULTI QUESTION)
                     if (txt.includes("[TECAI Type 6]")) {
@@ -420,7 +619,6 @@
             createNav(qNum - 1);
         }
 
-        /* DRAG (unchanged working version) */
         document.addEventListener("dragstart", e => {
             let el = e.target.closest(".draggable");
             if (el) e.dataTransfer.setData("id", el.id);
@@ -494,22 +692,24 @@ Self Assessment:
             let data = [];
 
             for (let i = 1; i < qNum; i++) {
+                // Look for ALL checked inputs (radios or checkboxes)
+                let checkedInputs = document.querySelectorAll(`input[name="q${i}"]:checked`);
 
-                let r = document.querySelector(`input[name="q${i}"]:checked`);
                 let textInputs = document.querySelectorAll(`
-  input[name="q${i}"]:not([type="radio"]),
-  input[name^="q${i}_"]:not([type="radio"])
-`);
+            input[name="q${i}"]:not([type="radio"]):not([type="checkbox"]),
+            input[name^="q${i}_"]:not([type="radio"]):not([type="checkbox"])
+        `);
 
                 let qDiv = document.getElementById(`q${i}`);
                 let drops = qDiv ? qDiv.querySelectorAll(".dropzone") : [];
 
-                // TYPE 1
-                if (r != null) {
-                    data.push(`${i}. ${r.value}`);
+                if (checkedInputs.length > 0) {
+                    let values = [];
+                    checkedInputs.forEach(input => values.push(input.value));
+                    data.push(`${i}. ${values.join(" | ")}`);
                 }
 
-                // TYPE 3
+                // TYPE 3 (Text Inputs)
                 else if (textInputs.length > 0) {
                     let values = [];
                     textInputs.forEach(inp => {
@@ -518,19 +718,17 @@ Self Assessment:
                     data.push(`${i}. ${values.join(" | ")}`);
                 }
 
-                // TYPE 4
+                // TYPE 4 (Drag and Drop)
                 else if (drops.length > 0) {
                     let values = [];
-
                     drops.forEach(d => {
                         let dragged = d.querySelector(".draggable");
                         values.push(dragged ? dragged.innerText.trim() : " ");
                     });
-
                     data.push(`${i}. ${values.join(" | ")}`);
                 }
 
-                // TYPE 5 (EMPTY)
+                // NO ANSWER
                 else {
                     data.push(`${i}. `);
                 }
@@ -538,7 +736,6 @@ Self Assessment:
 
             return data.join("\n");
         }
-
 
         /* SUBMIT */
         function submitTest() {
