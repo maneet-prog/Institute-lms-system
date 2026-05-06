@@ -211,10 +211,9 @@ function buildTecaiExamHtml({
     </header>
 
     <div class="controls">
-        <button onclick="setName()">Add Student Name</button>
+        <span class="source-name" style="margin-right: 15px;">${escapeHtml(studentName)}</span>
         <input type="file" id="fileInput" disabled hidden>
         <span class="source-name" style="margin-right: 15px;">${escapeHtml(sourceLabel)}</span>
-        <button onclick="startTest()">Start</button>
         <button onclick="submitTest()">Submit</button>
         <span class="timer" id="timer">60:00</span>
     </div>
