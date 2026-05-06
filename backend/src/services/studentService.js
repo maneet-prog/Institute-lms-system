@@ -3,7 +3,7 @@ const Content = require("../models/Content");
 const Module = require("../models/Module");
 const UserProgress = require("../models/Progress");
 const StudentSubmission = require("../models/StudentSubmission");
-const { UserBatch, UserCourse, UserModule } = require("../models/Enrollment");
+const { UserBatch, UserCourse, UserModule, UserContent } = require("../models/Enrollment");
 const AppError = require("../utils/AppError");
 const { serializeContent, serializeStudentSubmission } = require("../utils/serializers");
 const { gradeQuizSubmission, resolveQuizFromContent } = require("../utils/quiz");
@@ -164,6 +164,29 @@ const getModulesContent = async (user, tenant) => {
         batch_name: batch.batch_name,
         module_id: String(moduleItem._id),
         module_name: moduleItem.moduleName,
+        content: contents.map((content) => serializeContent(content, { includeQuizAnswers: false }))
+      });
+    }
+  }
+
+  const assignedContents = await UserContent.find({
+    userId: user._id,
+    instituteId,
+    active: true
+  }).lean();
+
+  if (assignedContents.length) {
+    const contents = await Content.find({
+      _id: { $in: assignedContents.map((ac) => ac.contentId) },
+      instituteId
+    }).sort({ createdAt: -1 });
+
+    if (contents.length) {
+      output.push({
+        batch_id: "personal",
+        batch_name: "Assigned Resources",
+        module_id: "personal-module",
+        module_name: "Personal Assignments",
         content: contents.map((content) => serializeContent(content, { includeQuizAnswers: false }))
       });
     }
@@ -536,8 +559,17 @@ const submitContent = async (payload, user, tenant) => {
     batchId: batch._id,
     active: true
   });
+  
   if (!assignments.length) {
-    throw new AppError("Content access denied.", 400);
+    const userContent = await UserContent.findOne({
+      userId: user._id,
+      instituteId,
+      contentId: content._id,
+      active: true
+    });
+    if (!userContent) {
+      throw new AppError("Content access denied.", 403);
+    }
   }
 
   const existingSubmission = await StudentSubmission.findOne({
@@ -646,8 +678,11 @@ const submitContent = async (payload, user, tenant) => {
     return serializeStudentSubmission(submission);
   }
 
+  const currentAttemptCount = existingSubmission?.attempts?.length || 0;
+  const attemptNumber = currentAttemptCount + 1;
+
   const attempt = {
-    attemptNumber: 1,
+    attemptNumber,
     responseType: payload.response_type,
     responseText: payload.response_text || null,
     responseUrl: payload.response_url || null,
@@ -671,8 +706,8 @@ const submitContent = async (payload, user, tenant) => {
   submission.responseText = payload.response_text || null;
   submission.responseUrl = payload.response_url || null;
   submission.submissionKind = "activity";
-  submission.attempts = [attempt];
-  submission.latestAttemptNumber = 1;
+  submission.attempts = [...(submission.attempts || []), attempt];
+  submission.latestAttemptNumber = attemptNumber;
   submission.latestAutoScore = 0;
   submission.latestAwardedMarks = null;
   submission.maxScore = 0;

@@ -91,7 +91,7 @@ const listCourses = async ({ tenant, currentUser, instituteId }) => {
 
   const query = {
     instituteId: scopedInstituteId,
-    ...(hasRole(currentUser, "super_admin") ? {} : { active: true })
+    ...(hasRole(currentUser, "super_admin", "institute_admin") ? {} : { active: true })
   };
   const courses = await Course.find(query).sort({ createdAt: 1 });
 
@@ -216,7 +216,7 @@ const listSubcourses = async ({ tenant, currentUser, instituteId, courseId }) =>
   const query = {
     instituteId: scopedInstituteId,
     ...(courseId ? { courseId } : {}),
-    ...(hasRole(currentUser, "super_admin") ? {} : { active: true })
+    ...(hasRole(currentUser, "super_admin", "institute_admin") ? {} : { active: true })
   };
   const subcourses = await Subcourse.find(query).sort({ createdAt: 1 });
 
@@ -337,7 +337,7 @@ const listModules = async ({ tenant, currentUser, instituteId, courseId, subcour
     instituteId: scopedInstituteId,
     ...(courseId ? { courseId } : {}),
     ...(subcourseId ? { subcourseId } : {}),
-    ...(hasRole(currentUser, "super_admin") ? {} : { active: true })
+    ...(hasRole(currentUser, "super_admin", "institute_admin") ? {} : { active: true })
   };
   const modules = await Module.find(query).sort({ createdAt: 1 });
 

@@ -9,7 +9,8 @@ import { useBatchesQuery, useModulesQuery, useReviewableSubmissionsQuery } from 
 const teacherSections = [
   { title: "Assigned batches", description: "See the groups you teach and move directly into each batch workspace.", href: "/dashboard/teacher/batches" },
   { title: "Teaching modules", description: "Review learning modules, resources, and delivery content from one place.", href: "/dashboard/teacher/modules" },
-  { title: "Submissions to review", description: "Check quiz attempts and activity responses, then award marks with feedback.", href: "/dashboard/teacher/submissions" }
+  { title: "Submissions to review", description: "Check quiz attempts and activity responses, then award marks with feedback.", href: "/dashboard/teacher/submissions" },
+  { title: "Resource assignment", description: "Assign specific exams or resources directly to individual students.", href: "/dashboard/teacher/resources" }
 ];
 
 export default function TeacherDashboardPage() {

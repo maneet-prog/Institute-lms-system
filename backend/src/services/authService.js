@@ -170,7 +170,8 @@ const verifyRegistration = async ({ verification_id, email_otp, mobile_otp }) =>
         subcourseId: pending.subcourseId
       });
     } catch (error) {
-      await User.findByIdAndDelete(user._id);
+      user.active = false;
+      await user.save();
       throw error;
     }
   }

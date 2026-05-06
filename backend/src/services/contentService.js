@@ -12,7 +12,7 @@ const {
   sameId
 } = require("./accessService");
 const { uploadFile, deleteFile } = require("./storageService");
-const { normalizeQuizPayload, validateQuizDefinition } = require("../utils/quiz");
+const { validateQuizDefinition } = require("../utils/quiz");
 const { buildTecaiQuizFromDocx, sanitizeRenderer } = require("../utils/tecaiReading");
 const { serializeContent, serializeStudentSubmission } = require("../utils/serializers");
 
@@ -127,7 +127,7 @@ const previewQuiz = async (file) => {
 
 const getTecaiExamData = async (contentId, tenant, currentUser) => {
   const content = await Content.findById(contentId);
-  if (!content) {
+  if (!content || (!hasRole(currentUser, "super_admin", "institute_admin") && !content.active)) {
     throw new AppError("Content not found.", 404);
   }
 
@@ -163,7 +163,8 @@ const getTecaiExamData = async (contentId, tenant, currentUser) => {
   return {
     content: serializeContent(content, { includeQuizAnswers: false }),
     renderer,
-    submission
+    submission,
+    student_name: currentUser ? `${currentUser.firstName} ${currentUser.lastName}`.trim() : "Student"
   };
 };
 
@@ -182,9 +183,11 @@ const createContent = async (payload, file, tenant, user) => {
     ? await uploadFile(file, buildContentUploadSegments(instituteId, payload.batch_id, payload.module_id))
     : null;
   try {
-    let quiz = null;
     if (payload.type === "quiz") {
-      quiz = file ? await buildTecaiQuizFromDocx(file) : normalizeQuizPayload(payload.quiz_payload);
+      quiz = file ? await buildTecaiQuizFromDocx(file) : null;
+      if (quiz && payload.attempt_limit !== undefined) {
+        quiz.attemptLimit = Math.max(0, Number(payload.attempt_limit) || 0);
+      }
     }
     validateContentState({
       contentType: payload.type,
@@ -238,11 +241,14 @@ const listModuleContents = async (moduleId, batchId, tenant, currentUser) => {
     forWrite: false
   });
 
-  const contents = await Content.find({
+  const query = {
     moduleId: moduleItem._id,
     batchId: batch._id,
-    instituteId: batch.instituteId
-  }).sort({ orderIndex: 1, createdAt: 1, _id: 1 });
+    instituteId: batch.instituteId,
+    ...(hasRole(currentUser, "super_admin", "institute_admin") ? {} : { active: true })
+  };
+
+  const contents = await Content.find(query).sort({ orderIndex: 1, createdAt: 1, _id: 1 });
 
   return contents.map((content) => serializeContent(content, { includeQuizAnswers: true }));
 };
@@ -282,8 +288,12 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
     nextType === "quiz"
       ? file
         ? await buildTecaiQuizFromDocx(file)
-        : normalizeQuizPayload(payload.quiz_payload !== undefined ? payload.quiz_payload : content.profile?.quiz || null)
+        : content.profile?.quiz || null
       : null;
+
+  if (nextQuiz && payload.attempt_limit !== undefined) {
+    nextQuiz.attemptLimit = Math.max(0, Number(payload.attempt_limit) || 0);
+  }
 
   try {
     validateContentState({
@@ -328,16 +338,18 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
 
 const deleteContent = async (id, tenant, currentUser) => {
   const content = await Content.findById(id);
-  if (!content) throw new AppError("Content not found.", 404);
-
-  if (!hasRole(currentUser, "super_admin") && !sameId(content.instituteId, tenant.instituteId)) {
+  if (
+    !content ||
+    (!hasRole(currentUser, "super_admin", "institute_admin") && !content.active) ||
+    (!hasRole(currentUser, "super_admin") && !sameId(content.instituteId, tenant.instituteId))
+  ) {
     throw new AppError("Content not found.", 404);
   }
 
   const batch = await getBatchOrThrow(content.batchId);
   await assertContentWriteAccess(currentUser, tenant.instituteId, batch, content);
-  await deleteFile(content.storageKey);
-  await Content.findByIdAndDelete(id);
+  content.active = false;
+  await content.save();
 };
 
 module.exports = {

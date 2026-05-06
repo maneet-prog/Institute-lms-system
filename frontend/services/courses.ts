@@ -174,11 +174,11 @@ function buildContentFormData(payload: {
   instructions?: string;
   downloadable?: boolean;
   response_type?: string;
-  quiz_payload?: string;
   duration?: number;
   institute_id?: string;
   replace_file?: boolean;
   file?: File | null;
+  attempt_limit?: number;
 }) {
   const formData = new FormData();
   Object.entries(payload).forEach(([key, value]) => {
@@ -212,9 +212,9 @@ export async function addContent(payload: {
   instructions?: string;
   downloadable?: boolean;
   response_type?: string;
-  quiz_payload?: string;
   duration?: number;
   institute_id?: string;
+  attempt_limit?: number;
   file?: File | null;
 }): Promise<Content> {
   const { data } = await api.post<Content>("/content", buildContentFormData(payload));
@@ -253,10 +253,10 @@ export async function updateContent(
     instructions?: string;
     downloadable?: boolean;
     response_type?: string;
-    quiz_payload?: string;
     duration?: number;
     institute_id?: string;
     replace_file?: boolean;
+    attempt_limit?: number;
     file?: File | null;
   }
 ): Promise<Content> {

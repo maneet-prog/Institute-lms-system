@@ -234,6 +234,7 @@ export interface StudentWorkspaceContent extends Content {
 export interface TecaiExamData {
   content: Content;
   renderer: TecaiQuizRenderer;
+  student_name: string;
   submission?: StudentSubmission | null;
 }
 

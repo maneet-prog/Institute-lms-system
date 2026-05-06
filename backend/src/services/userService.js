@@ -106,8 +106,8 @@ const enrichUsers = async (users) => {
 
 const clearUserAssignments = async (userId, instituteId) => {
   await UserBatch.updateMany({ userId, instituteId, active: true }, { active: false });
-  await UserCourse.deleteMany({ userId, instituteId });
-  await BatchTeacher.deleteMany({ userId, instituteId });
+  await UserCourse.updateMany({ userId, instituteId }, { active: false });
+  await BatchTeacher.updateMany({ userId, instituteId }, { active: false });
 };
 
 const applyUserAssignments = async ({ user, instituteId, courseId, subcourseId, batchId, currentUser, tenant }) => {
@@ -129,14 +129,24 @@ const applyUserAssignments = async ({ user, instituteId, courseId, subcourseId, 
     normalizedSubcourseId
   );
 
-  await UserSelectedCourse.deleteMany({ userId: user._id });
+  await UserSelectedCourse.updateMany({ userId: user._id }, { active: false });
 
   if (normalizedCourseId && normalizedSubcourseId && !batch) {
-    await UserSelectedCourse.create({
+    const existing = await UserSelectedCourse.findOne({
       userId: user._id,
       courseId: normalizedCourseId,
       subcourseId: normalizedSubcourseId
     });
+    if (existing) {
+      existing.active = true;
+      await existing.save();
+    } else {
+      await UserSelectedCourse.create({
+        userId: user._id,
+        courseId: normalizedCourseId,
+        subcourseId: normalizedSubcourseId
+      });
+    }
   }
 
   await clearUserAssignments(user._id, instituteId);
@@ -176,7 +186,7 @@ const listUsers = async ({ instituteId, tenant, currentUser }) => {
     currentUser
   });
 
-  const query = hasRole(currentUser, "super_admin")
+  const query = hasRole(currentUser, "super_admin", "institute_admin")
     ? { instituteId: scopedInstituteId }
     : { instituteId: scopedInstituteId, active: true };
 

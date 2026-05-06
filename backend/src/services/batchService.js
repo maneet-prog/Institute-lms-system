@@ -44,7 +44,12 @@ const syncStudentCourseEnrollment = async (userId, instituteId, batch) => {
     subcourseId: batch.subcourseId
   });
 
-  if (!existing) {
+  if (existing) {
+    if (!existing.active) {
+      existing.active = true;
+      await existing.save();
+    }
+  } else {
     await UserCourse.create({
       instituteId,
       userId,
@@ -64,12 +69,15 @@ const cleanupStudentCourseEnrollment = async (userId, instituteId, batch) => {
   );
 
   if (!stillHasSamePath) {
-    await UserCourse.deleteMany({
-      userId,
-      instituteId,
-      courseId: batch.courseId,
-      subcourseId: batch.subcourseId
-    });
+    await UserCourse.updateMany(
+      {
+        userId,
+        instituteId,
+        courseId: batch.courseId,
+        subcourseId: batch.subcourseId
+      },
+      { active: false }
+    );
   }
 };
 
@@ -140,7 +148,7 @@ const listBatches = async ({ tenant, currentUser, instituteId }) => {
 
   const query = {
     instituteId: scopedInstituteId,
-    ...(hasRole(currentUser, "super_admin") ? {} : { active: true })
+    ...(hasRole(currentUser, "super_admin", "institute_admin") ? {} : { active: true })
   };
   const batches = await Batch.find(query).sort({ createdAt: 1 });
 
@@ -247,7 +255,14 @@ const assignTeacher = async (payload, tenant, currentUser) => {
     batchId: payload.batch_id,
     userId: payload.user_id
   });
-  if (existing) throw new AppError("Teacher already assigned to batch.", 409);
+  if (existing) {
+    if (!existing.active) {
+      existing.active = true;
+      await existing.save();
+      return serializeBatchTeacher(existing);
+    }
+    throw new AppError("Teacher already assigned to batch.", 409);
+  }
 
   const row = await BatchTeacher.create({
     instituteId,
@@ -263,12 +278,15 @@ const removeTeacher = async (payload, tenant, currentUser) => {
     tenant,
     currentUser
   });
-  const removed = await BatchTeacher.findOneAndDelete({
+  const removed = await BatchTeacher.findOne({
     instituteId,
     batchId: payload.batch_id,
     userId: payload.user_id
   });
-  if (!removed) throw new AppError("Teacher assignment not found.", 404);
+  if (!removed || !removed.active) throw new AppError("Teacher assignment not found.", 404);
+
+  removed.active = false;
+  await removed.save();
 };
 
 const assignUserToBatch = async (payload, tenant, currentUser) => {

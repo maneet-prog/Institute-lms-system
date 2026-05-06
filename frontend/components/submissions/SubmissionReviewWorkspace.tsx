@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { useBatchesQuery, useReviewSubmissionMutation, useReviewableSubmissionsQuery } from "@/hooks/useLmsQueries";
+import { useBatchesQuery, useReviewSubmissionMutation, useReviewableSubmissionsQuery, useCoursesByInstituteQuery, useUsersByInstituteQuery } from "@/hooks/useLmsQueries";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -17,10 +17,17 @@ interface Props {
 
 export function SubmissionReviewWorkspace({ badge, title, description }: Props) {
   const { data: batches = [] } = useBatchesQuery(undefined, { refetchInterval: 15000 });
+  const { data: courses = [] } = useCoursesByInstituteQuery(undefined, { refetchInterval: 15000 });
+  const { data: users = [] } = useUsersByInstituteQuery(undefined, { refetchInterval: 15000 });
+
   const [selectedBatchId, setSelectedBatchId] = useState("");
-  const { data: submissions = [], isLoading } = useReviewableSubmissionsQuery(selectedBatchId || undefined, {
-    refetchInterval: 15000
-  });
+  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState("");
+
+  const { data: submissions = [], isLoading } = useReviewableSubmissionsQuery(
+    { batchId: selectedBatchId || undefined, courseId: selectedCourseId || undefined, userId: selectedUserId || undefined },
+    { refetchInterval: 15000 }
+  );
   const reviewSubmission = useReviewSubmissionMutation();
   const [drafts, setDrafts] = useState<Record<string, { awarded_marks: string; feedback: string }>>({});
 
@@ -32,6 +39,24 @@ export function SubmissionReviewWorkspace({ badge, title, description }: Props) 
     [batches]
   );
 
+  const courseOptions = useMemo(
+    () => [
+      { label: "All accessible courses", value: "" },
+      ...courses.map((course) => ({ label: course.course_name, value: course.course_id }))
+    ],
+    [courses]
+  );
+
+  const studentOptions = useMemo(
+    () => [
+      { label: "All students", value: "" },
+      ...users
+        .filter((user) => user.role_names.includes("student"))
+        .map((user) => ({ label: `${user.first_name} ${user.last_name}`, value: user.user_id }))
+    ],
+    [users]
+  );
+
   return (
     <div className="space-y-6">
       <Card className="border-brand-100 bg-gradient-to-br from-brand-50 via-white to-white">
@@ -41,12 +66,26 @@ export function SubmissionReviewWorkspace({ badge, title, description }: Props) 
       </Card>
 
       <Card>
-        <Select
-          label="Filter by Batch"
-          options={batchOptions}
-          value={selectedBatchId}
-          onChange={(event) => setSelectedBatchId(event.target.value)}
-        />
+        <div className="grid gap-4 md:grid-cols-3">
+          <Select
+            label="Filter by Batch"
+            options={batchOptions}
+            value={selectedBatchId}
+            onChange={(event) => setSelectedBatchId(event.target.value)}
+          />
+          <Select
+            label="Filter by Course"
+            options={courseOptions}
+            value={selectedCourseId}
+            onChange={(event) => setSelectedCourseId(event.target.value)}
+          />
+          <Select
+            label="Filter by Student"
+            options={studentOptions}
+            value={selectedUserId}
+            onChange={(event) => setSelectedUserId(event.target.value)}
+          />
+        </div>
       </Card>
 
       {isLoading ? <p className="text-sm text-slate-600">Loading submissions...</p> : null}

@@ -15,6 +15,7 @@ import {
   removeTeacher
 } from "@/services/batches";
 import { updateBatch } from "@/services/batches";
+import { assignResource, removeResource } from "@/services/resources";
 import {
   addContent,
   createCourse,
@@ -191,10 +192,13 @@ export function useProgressQuery(options?: { refetchInterval?: number }) {
   return useQuery({ queryKey: ["progress"], queryFn: getMyProgress, refetchInterval: options?.refetchInterval });
 }
 
-export function useReviewableSubmissionsQuery(batchId?: string, options?: { enabled?: boolean; refetchInterval?: number }) {
+export function useReviewableSubmissionsQuery(
+  filters?: { batchId?: string; courseId?: string; userId?: string },
+  options?: { enabled?: boolean; refetchInterval?: number }
+) {
   return useQuery({
-    queryKey: ["reviewable-submissions", batchId ?? "all"],
-    queryFn: () => getReviewableSubmissions(batchId),
+    queryKey: ["reviewable-submissions", filters?.batchId ?? "all", filters?.courseId ?? "all", filters?.userId ?? "all"],
+    queryFn: () => getReviewableSubmissions(filters),
     enabled: options?.enabled ?? true,
     refetchInterval: options?.refetchInterval
   });
@@ -494,6 +498,18 @@ export function useAssignStudentBatchMutation() {
   });
 }
 
+export function useAssignResourceMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: assignResource,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["student-batch-workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+      pushToast("Resource assigned successfully.", "success");
+    }
+  });
+}
+
 export function useRemoveTeacherMutation() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -515,6 +531,18 @@ export function useRemoveStudentBatchMutation() {
       queryClient.invalidateQueries({ queryKey: ["batch-detail"] });
       queryClient.invalidateQueries({ queryKey: ["users"] });
       pushToast("Student removed from batch.", "success");
+    }
+  });
+}
+
+export function useRemoveResourceMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: removeResource,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["student-batch-workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+      pushToast("Resource removed successfully.", "success");
     }
   });
 }

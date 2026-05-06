@@ -53,7 +53,8 @@ const studentSubmissionSchema = new mongoose.Schema(
     feedback: { type: String, default: null },
     reviewedAt: { type: Date, default: null },
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
-    submittedAt: { type: Date, default: Date.now }
+    submittedAt: { type: Date, default: Date.now },
+    active: { type: Boolean, default: true }
   },
   { timestamps: true }
 );

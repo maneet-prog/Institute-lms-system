@@ -14,7 +14,9 @@ const instituteAdminSections = [
   { title: "Admissions and approvals", description: "Approve new users, assign access, and control institute-side onboarding.", href: "/dashboard/institute-admin/users" },
   { title: "Faculty operations", description: "Maintain teacher accounts and connect instructors to active batches.", href: "/dashboard/institute-admin/teachers" },
   { title: "Program catalog", description: "Build course and subcourse structures for each academic offering.", href: "/dashboard/institute-admin/courses" },
-  { title: "Batch delivery", description: "Coordinate cohorts, dates, rooms, and student-teacher mappings.", href: "/dashboard/institute-admin/batches" }
+  { title: "Batch delivery", description: "Coordinate cohorts, dates, rooms, and student-teacher mappings.", href: "/dashboard/institute-admin/batches" },
+  { title: "Student submissions", description: "View and filter student exam attempts across the institute.", href: "/dashboard/institute-admin/submissions" },
+  { title: "Resource assignment", description: "Assign specific exams or resources directly to individual students.", href: "/dashboard/institute-admin/resources" }
 ];
 
 export default function InstituteAdminDashboardPage() {

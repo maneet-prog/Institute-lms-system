@@ -7,24 +7,26 @@ import { Content, StudentSubmission, TecaiQuizRenderer } from "@/types/lms";
 
 const escapeJson = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c");
 const escapeHtml = (value: string) =>
-  value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
 
 function buildTecaiExamHtml({
-  sourceLabel,
-  renderer,
-  autoStart,
-  allowSave
+    sourceLabel,
+    renderer,
+    studentName,
+    autoStart,
+    allowSave
 }: {
-  sourceLabel: string;
-  renderer: TecaiQuizRenderer;
-  autoStart: boolean;
-  allowSave: boolean;
+    sourceLabel: string;
+    renderer: TecaiQuizRenderer;
+    studentName: string;
+    autoStart: boolean;
+    allowSave: boolean;
 }) {
-  return `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -209,8 +211,8 @@ function buildTecaiExamHtml({
     </header>
 
     <div class="controls">
-        <button onclick="setName()">Add Student Name</button>
-        <input type="file" id="fileInput" disabled>
+        <span class="source-name" style="margin-right: 15px;">${escapeHtml(studentName)}</span>
+        <input type="file" id="fileInput" disabled hidden>
         <span class="source-name">${escapeHtml(sourceLabel)}</span>
         <button onclick="startTest()">Start</button>
         <button onclick="submitTest()">Submit</button>
@@ -230,17 +232,12 @@ function buildTecaiExamHtml({
         const autoStart = ${autoStart ? "true" : "false"};
         const allowSave = ${allowSave ? "true" : "false"};
 
-        let studentName = "Student";
+        let studentName = "${escapeHtml(studentName)}";
         let qNum = 1;
         let type4Answers = {};
         let renderedSets = new Set();
         let totalSeconds = initialSeconds;
         let timerInterval;
-
-        function setName() {
-            let name = prompt("Enter student name:");
-            if (name) studentName = name;
-        }
 
         async function startTest() {
             const paragraphs = preloadedParagraphs;
@@ -553,106 +550,109 @@ Self Assessment:
 }
 
 export function TecaiExamFrame({
-  content,
-  renderer,
-  submission,
-  autoStart = false,
-  allowSave = false
+    content,
+    renderer,
+    submission,
+    studentName = "Student",
+    autoStart = false,
+    allowSave = false
 }: {
-  content: Content;
-  renderer: TecaiQuizRenderer;
-  submission?: StudentSubmission | null;
-  autoStart?: boolean;
-  allowSave?: boolean;
+    content: Content;
+    renderer: TecaiQuizRenderer;
+    submission?: StudentSubmission | null;
+    studentName?: string;
+    autoStart?: boolean;
+    allowSave?: boolean;
 }) {
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const [latestSubmission, setLatestSubmission] = useState<StudentSubmission | null>(submission ?? null);
-  const isSubmittingRef = useRef(false);
-  const submitResponse = useSubmitStudentContentMutation();
+    const iframeRef = useRef<HTMLIFrameElement | null>(null);
+    const [latestSubmission, setLatestSubmission] = useState<StudentSubmission | null>(submission ?? null);
+    const isSubmittingRef = useRef(false);
+    const submitResponse = useSubmitStudentContentMutation();
 
-  const attemptLimit = content.quiz?.attempt_limit ?? 999;
-  const attemptsUsed = latestSubmission?.attempts.length ?? 0;
-  const isLocked = allowSave && attemptsUsed >= attemptLimit;
-  const srcDoc = useMemo(
-    () =>
-      buildTecaiExamHtml({
-        sourceLabel: content.title || "TECAI Exam",
-        renderer,
-        autoStart,
-        allowSave: allowSave && !isLocked
-      }),
-    [allowSave, autoStart, content.title, isLocked, renderer]
-  );
-
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.source !== iframeRef.current?.contentWindow) {
-        return;
-      }
-      if (!allowSave || isLocked) {
-        return;
-      }
-
-      const data = event.data;
-      if (!data || data.type !== "tecai-submit" || typeof data.responseText !== "string") {
-        return;
-      }
-      if (isSubmittingRef.current) {
-        return;
-      }
-
-      isSubmittingRef.current = true;
-      submitResponse.mutate(
-        {
-          content_id: content.content_id,
-          response_type: "quiz",
-          response_text: data.responseText
-        },
-        {
-          onSuccess: (result) => {
-            setLatestSubmission(result);
-            isSubmittingRef.current = false;
-          },
-          onError: () => {
-            isSubmittingRef.current = false;
-          }
-        }
-      );
-    };
-
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, [allowSave, content.content_id, isLocked, submitResponse]);
-
-  if (!renderer.paragraphs.length) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100 p-6 text-sm text-slate-700">
-        This TECAI exam does not have any parsed DOCX paragraphs yet.
-      </div>
+    const attemptLimit = content.quiz?.attempt_limit ?? 999;
+    const attemptsUsed = latestSubmission?.attempts.length ?? 0;
+    const isLocked = allowSave && attemptsUsed >= attemptLimit;
+    const srcDoc = useMemo(
+        () =>
+            buildTecaiExamHtml({
+                sourceLabel: content.title || "TECAI Exam",
+                renderer,
+                studentName,
+                autoStart,
+                allowSave: allowSave && !isLocked
+            }),
+        [allowSave, autoStart, content.title, isLocked, renderer, studentName]
     );
-  }
 
-  if (isLocked) {
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            if (event.source !== iframeRef.current?.contentWindow) {
+                return;
+            }
+            if (!allowSave || isLocked) {
+                return;
+            }
+
+            const data = event.data;
+            if (!data || data.type !== "tecai-submit" || typeof data.responseText !== "string") {
+                return;
+            }
+            if (isSubmittingRef.current) {
+                return;
+            }
+
+            isSubmittingRef.current = true;
+            submitResponse.mutate(
+                {
+                    content_id: content.content_id,
+                    response_type: "quiz",
+                    response_text: data.responseText
+                },
+                {
+                    onSuccess: (result) => {
+                        setLatestSubmission(result);
+                        isSubmittingRef.current = false;
+                    },
+                    onError: () => {
+                        isSubmittingRef.current = false;
+                    }
+                }
+            );
+        };
+
+        window.addEventListener("message", handleMessage);
+        return () => window.removeEventListener("message", handleMessage);
+    }, [allowSave, content.content_id, isLocked, submitResponse]);
+
+    if (!renderer.paragraphs.length) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-slate-100 p-6 text-sm text-slate-700">
+                This TECAI exam does not have any parsed DOCX paragraphs yet.
+            </div>
+        );
+    }
+
+    if (isLocked) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
+                <div className="max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h1 className="text-xl font-semibold text-slate-900">Attempt limit reached</h1>
+                    <p className="mt-2 text-sm text-slate-600">
+                        You have already used {attemptsUsed}/{attemptLimit} allowed attempt{attemptLimit > 1 ? "s" : ""} for this exam.
+                    </p>
+                    {latestSubmission?.response_text ? (
+                        <pre className="mt-4 max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                            {latestSubmission.response_text}
+                        </pre>
+                    ) : null}
+                </div>
+            </div>
+        );
+    }
+
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
-        <div className="max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h1 className="text-xl font-semibold text-slate-900">Attempt limit reached</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            You have already used {attemptsUsed}/{attemptLimit} allowed attempt{attemptLimit > 1 ? "s" : ""} for this exam.
-          </p>
-          {latestSubmission?.response_text ? (
-            <pre className="mt-4 max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              {latestSubmission.response_text}
-            </pre>
-          ) : null}
+        <div className="fixed inset-0 z-50 bg-[#f5f7fb]">
+            <iframe ref={iframeRef} title={content.title} srcDoc={srcDoc} className="h-full w-full border-0" />
         </div>
-      </div>
     );
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 bg-[#f5f7fb]">
-      <iframe ref={iframeRef} title={content.title} srcDoc={srcDoc} className="h-full w-full border-0" />
-    </div>
-  );
 }

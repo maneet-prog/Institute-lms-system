@@ -24,7 +24,7 @@ const quizQuestionSchema = new mongoose.Schema(
 const quizProfileSchema = new mongoose.Schema(
   {
     mode: { type: String, enum: ["mcq", "written", "mixed"], default: "mcq" },
-    attemptLimit: { type: Number, min: 1, default: 1 },
+    attemptLimit: { type: Number, min: 0, default: 1 },
     questions: { type: [quizQuestionSchema], default: [] },
     renderer: { type: mongoose.Schema.Types.Mixed, default: null }
   },
@@ -75,7 +75,8 @@ const contentSchema = new mongoose.Schema(
     storageKey: { type: String },
     orderIndex: { type: Number, default: 0 },
     duration: { type: Number, default: 0 },
-    profile: { type: contentProfileSchema, default: () => ({}) }
+    profile: { type: contentProfileSchema, default: () => ({}) },
+    active: { type: Boolean, default: true }
   },
   { timestamps: true }
 );

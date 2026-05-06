@@ -23,7 +23,7 @@ const getAccessibleBatchIds = async (user, instituteId) => {
   throw new AppError("Not enough privileges for submissions.", 403);
 };
 
-const listSubmissions = async ({ batchId }, user, tenant) => {
+const listSubmissions = async ({ batchId, userId, courseId }, user, tenant) => {
   const instituteId = getInstituteId(user, tenant);
   if (!instituteId) {
     throw new AppError("User institute is not configured.", 403);
@@ -37,7 +37,17 @@ const listSubmissions = async ({ batchId }, user, tenant) => {
     throw new AppError("Batch access denied.", 403);
   }
 
-  const contentFilterBatchIds = batchId ? [batchId] : [...accessibleBatchIds];
+  let contentFilterBatchIds = batchId ? [batchId] : [...accessibleBatchIds];
+
+  if (courseId) {
+    const courseBatches = await Batch.find({ courseId, _id: { $in: contentFilterBatchIds } }).lean();
+    contentFilterBatchIds = courseBatches.map((b) => String(b._id));
+  }
+
+  if (!contentFilterBatchIds.length) {
+    return [];
+  }
+
   const contents = await Content.find({
     instituteId,
     batchId: { $in: contentFilterBatchIds }
@@ -46,10 +56,15 @@ const listSubmissions = async ({ batchId }, user, tenant) => {
     return [];
   }
 
-  const submissions = await StudentSubmission.find({
+  const submissionQuery = {
     instituteId,
     contentId: { $in: contents.map((content) => content._id) }
-  }).populate("userId reviewedBy");
+  };
+  if (userId) {
+    submissionQuery.userId = userId;
+  }
+
+  const submissions = await StudentSubmission.find(submissionQuery).populate("userId reviewedBy");
   if (!submissions.length) {
     return [];
   }

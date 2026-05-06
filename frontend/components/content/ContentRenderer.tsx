@@ -3,7 +3,6 @@
 import { Content, StudentWorkspaceContent } from "@/types/lms";
 
 import { Button } from "@/components/ui/Button";
-import { QuizContent } from "@/components/content/QuizContent";
 
 function getUrl(content: Content | StudentWorkspaceContent) {
   return content.resolved_url ?? content.file_url ?? content.external_url ?? content.url ?? "";
@@ -106,7 +105,11 @@ export function ContentRenderer({ content }: { content: Content | StudentWorkspa
         </div>
       );
     }
-    return <QuizContent content={content} />;
+    return (
+      <div className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
+        Legacy or unsupported quiz format.
+      </div>
+    );
   }
 
   return (
