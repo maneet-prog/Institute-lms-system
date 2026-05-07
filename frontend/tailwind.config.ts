@@ -8,15 +8,15 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Poppins", "ui-sans-serif", "system-ui"]
+        sans: ["Outfit", "ui-sans-serif", "system-ui"]
       },
       colors: {
         brand: {
-          50: "#ecfdf3",
-          100: "#d1fae5",
-          500: "#10b981",
-          600: "#059669",
-          700: "#047857"
+          50: "#eefcf9",
+          100: "#cff7ef",
+          500: "#14b8a6",
+          600: "#0f9b8e",
+          700: "#0f766e"
         }
       }
     }

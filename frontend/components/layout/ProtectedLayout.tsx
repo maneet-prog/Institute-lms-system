@@ -13,7 +13,7 @@ export function ProtectedLayout({ children }: PropsWithChildren) {
   }
 
   return (
-    <div className="min-h-[calc(100vh-73px)] lg:flex">
+    <div className="min-h-screen lg:flex">
       <Sidebar />
       <section className="flex-1 p-4 lg:p-6">{children}</section>
     </div>

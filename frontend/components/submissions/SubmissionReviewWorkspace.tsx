@@ -119,9 +119,9 @@ export function SubmissionReviewWorkspace({ badge, title, description }: Props) 
                     Attempt {latestAttempt?.attempt_number} | Auto score {latestAttempt?.auto_score ?? 0}/{latestAttempt?.max_score ?? 0}
                   </p>
                   {latestAttempt?.response_text ? (
-                    <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                    <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
                       {latestAttempt.response_text}
-                    </div>
+                    </pre>
                   ) : null}
                   {latestAttempt?.response_url ? (
                     <a href={latestAttempt.response_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-brand-700 hover:underline">

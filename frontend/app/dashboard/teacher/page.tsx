@@ -32,11 +32,11 @@ export default function TeacherDashboardPage() {
 
   return (
     <section className="page-shell">
-      <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+      <div className="brand-card rounded-[2rem] border border-white/70 p-8 shadow-sm">
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-emerald-700">Teacher Overview</p>
         <h1 className="mt-3 text-3xl font-bold text-slate-900">Deliver classes, track batches, and keep teaching organized</h1>
         <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
-          Your workspace is tuned for batch-based teaching so you can move between delivery groups, learning modules, learner submissions, and institute expectations with less friction.
+          Your workspace is tuned for batch-based teaching so you can move between delivery groups, learning modules, learner submissions, and coaching expectations with less friction.
         </p>
       </div>
 

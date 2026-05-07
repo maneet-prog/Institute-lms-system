@@ -11,81 +11,62 @@ export interface FeatureGroup {
 }
 
 export const platformStats = [
-  { value: "360°", label: "Institute operations in one LMS" },
-  { value: "4", label: "Role-based workspaces for every stakeholder" },
-  { value: "12+", label: "Core institute service areas covered" },
-  { value: "Multi-tenant", label: "Ready for groups, branches, and franchises" }
+  { value: "22+", label: "Years guiding language learners with confidence" },
+  { value: "7+", label: "Signature programs across exam prep and spoken fluency" },
+  { value: "4", label: "Role-based dashboards for admins, faculty, and students" },
+  { value: "Daily", label: "Practice, progress, and coaching operations in one place" }
 ];
 
 export const featureGroups: FeatureGroup[] = [
   {
-    eyebrow: "Learning Delivery",
-    title: "Academic structure built for institute workflows",
+    eyebrow: "Exam Readiness",
+    title: "Training journeys inspired by high-touch coaching programs",
     description:
-      "Manage courses, subcourses, modules, batches, classroom notes, schedules, and delivery paths from a single operational model.",
+      "Organize IELTS, PTE, CELPIP, TOEFL, spoken English, French, and Duolingo preparation with clear modules, guided resources, and practical assignments.",
     items: [
-      { title: "Course catalog", description: "Organize programs, certifications, and modular learning paths." },
-      { title: "Batch management", description: "Run cohorts with timelines, rooms, start dates, and faculty assignment." },
-      { title: "Content delivery", description: "Support videos, URLs, downloadable resources, instructions, and activity types." },
-      { title: "Progress tracking", description: "Monitor completion, activity status, and learner movement through modules." }
+      { title: "Program library", description: "Present each course path with a cleaner structure for learners and staff." },
+      { title: "Practice delivery", description: "Support mock tests, written tasks, reading modules, and coaching resources." },
+      { title: "Lesson sequencing", description: "Keep study material ordered so students know what to attempt next." },
+      { title: "Progress visibility", description: "Track completion, responses, and readiness without extra spreadsheets." }
     ]
   },
   {
-    eyebrow: "People & Access",
-    title: "Role-based administration for institutes",
+    eyebrow: "Student Journey",
+    title: "Admissions, enrollments, and learner follow-through in one flow",
     description:
-      "Support central admins, institute admins, teachers, and students with permissions that match how training centers and campuses operate.",
+      "Guide students from registration and approval through assigned batches, submissions, and feedback with a calmer, more professional experience.",
     items: [
-      { title: "Approval workflows", description: "Review registrations and activate users with institute-aware access rules." },
-      { title: "Teacher assignment", description: "Map faculty to batches and course delivery responsibilities." },
-      { title: "Student enrollment", description: "Place learners into the right course structures and teaching groups." },
-      { title: "Tenant separation", description: "Keep institutes isolated while preserving central platform control." }
+      { title: "OTP registration", description: "Register students securely before platform access is approved." },
+      { title: "Batch assignment", description: "Place each learner into the right coaching group and course track." },
+      { title: "Teacher feedback", description: "Collect attempts, review responses, and share marks from the same workspace." },
+      { title: "Student confidence", description: "Reduce confusion with cleaner navigation, labels, and study cues." }
     ]
   },
   {
-    eyebrow: "Institute Services",
-    title: "Services inspired by full-suite LMS platforms",
+    eyebrow: "Coaching Operations",
+    title: "Branch-ready administration for daily academic delivery",
     description:
-      "Cover the service areas institutes expect when comparing platforms like TalentLMS: onboarding, compliance, reporting, communication, and branded delivery.",
+      "Support admins, institute teams, and teachers with the tools needed to run schedules, manage content, review submissions, and stay aligned across branches.",
     items: [
-      { title: "Onboarding & induction", description: "Guide new students, teachers, and branch staff into the platform quickly." },
-      { title: "Assessments & submissions", description: "Collect text, links, and assignment-style responses inside learning flows." },
-      { title: "Notifications & alerts", description: "Keep admins aware of pending approvals and operational follow-ups." },
-      { title: "Branch-ready branding", description: "Present one LMS experience that can serve multiple institutes or campuses." }
+      { title: "Faculty coordination", description: "Map instructors to active batches and keep delivery responsibilities visible." },
+      { title: "Submission review", description: "Handle exam attempts, assignments, and manual grading without leaving the dashboard." },
+      { title: "Operational clarity", description: "Monitor users, programs, and active groups from one polished control layer." },
+      { title: "Brand consistency", description: "Present one TecOnline identity across marketing, dashboards, and exam views." }
     ]
   }
 ];
 
 export const instituteServices = [
-  "Student onboarding, registration, and approval",
-  "Teacher onboarding and faculty assignment",
-  "Course, program, and module management",
+  "IELTS, PTE, CELPIP, TOEFL, Spoken English, French, and Duolingo program support",
+  "Student onboarding, OTP verification, and approval workflows",
+  "Teacher onboarding and faculty-to-batch assignment",
+  "Course, subcourse, module, and exam content management",
   "Batch scheduling and classroom coordination",
-  "Content hosting and blended learning delivery",
-  "Assessments, submissions, and activity instructions",
+  "TECAI exam delivery and reading practice workflows",
+  "Assignments, submissions, and review queues",
   "Student progress and completion monitoring",
-  "Multi-institute and branch-level administration",
-  "Operational notifications for pending actions",
+  "Branch and institute-level administration",
+  "Daily notifications for pending approvals and academic actions",
   "Role-based portals for admins, teachers, and learners",
-  "Program scalability for coaching centers and academies",
-  "Platform positioning for certificate, skill, and exam-prep institutes"
-];
-
-export const roleSpotlights = [
-  {
-    role: "Super Admin",
-    summary: "Oversee multiple institutes, standardize catalog structures, and monitor platform-wide operations."
-  },
-  {
-    role: "Institute Admin",
-    summary: "Run admissions, batches, teachers, and course delivery for a specific institute or campus."
-  },
-  {
-    role: "Teacher",
-    summary: "Manage assigned batches, deliver modules, and track learner participation with less manual coordination."
-  },
-  {
-    role: "Student",
-    summary: "Access enrolled courses, submit work, revisit resources, and follow a clear learning path."
-  }
+  "Study visa guidance workflows and learner support operations"
 ];

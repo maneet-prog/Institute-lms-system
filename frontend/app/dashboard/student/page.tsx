@@ -66,8 +66,7 @@ export default function StudentDashboardPage() {
           Welcome back, {dashboard.student.first_name}
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-          Keep your batches, module progress, and next study steps in one place. This page is powered by a fresh
-          student dashboard API so the overview loads from a single stable request.
+          Keep your batches, study progress, upcoming practice, and next learning steps in one clear TecOnline workspace.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           <AppLink

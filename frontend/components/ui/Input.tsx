@@ -17,7 +17,7 @@ export function Input({ label, error, className, ...props }: Props) {
       ) : null}
       <input
         className={clsx(
-          "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2",
+          "w-full rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-sm outline-none ring-brand-500 transition focus:border-brand-200 focus:ring-2",
           className
         )}
         {...props}

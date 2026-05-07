@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -6,12 +6,64 @@
 
 :root {
   color-scheme: light;
+  --page-bg: #f7f5ef;
+  --page-ink: #0f172a;
+  --brand-navy: #A93A30;
+  --brand-teal: #0f766e;
+  --brand-mint: #d8f3ec;
+  --brand-gold: #f0b44c;
+  --brand-card: rgba(255, 255, 255, 0.9);
+}
+
+html {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.18), transparent 28%),
+    radial-gradient(circle at top right, rgba(240, 180, 76, 0.18), transparent 24%),
+    linear-gradient(180deg, #fffdf7 0%, #f7f5ef 48%, #eef6f7 100%);
 }
 
 body {
-  @apply bg-slate-50 text-slate-900;
+  @apply text-slate-900 antialiased;
+  min-height: 100vh;
+  background: transparent;
+  color: var(--page-ink);
+}
+
+::selection {
+  background: rgba(20, 184, 166, 0.2);
+  color: #0f172a;
 }
 
 .page-shell {
-  @apply mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8;
+  @apply mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8;
+}
+
+.brand-shell {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.7)),
+    rgba(255, 255, 255, 0.74);
+  backdrop-filter: blur(18px);
+}
+
+.brand-card {
+  background: var(--brand-card);
+  box-shadow: 0 18px 60px rgba(15, 39, 64, 0.08);
+}
+
+.brand-divider {
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.brand-heading {
+  color: var(--brand-navy);
+}
+
+.brand-muted {
+  color: #4b5563;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 118, 110, 0.45) transparent;
 }

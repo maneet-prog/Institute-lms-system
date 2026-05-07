@@ -79,7 +79,7 @@ export function DataTable<T>({ rows, columns, rowKey, initialPageSize = 10 }: Pr
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-xl border bg-white p-4 md:flex-row md:items-end md:justify-between">
+      <div className="brand-card flex flex-col gap-3 rounded-[1.5rem] border border-white/70 p-4 md:flex-row md:items-end md:justify-between">
         <label className="block w-full max-w-md space-y-1">
           <span className="text-sm font-medium text-slate-700">Global Search</span>
           <input
@@ -89,7 +89,7 @@ export function DataTable<T>({ rows, columns, rowKey, initialPageSize = 10 }: Pr
               setPage(1);
             }}
             placeholder="Search across all visible columns"
-            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
+            className="w-full rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-sm outline-none ring-brand-500 focus:ring-2"
           />
         </label>
         <label className="block space-y-1">
@@ -100,7 +100,7 @@ export function DataTable<T>({ rows, columns, rowKey, initialPageSize = 10 }: Pr
               setPageSize(Number(event.target.value));
               setPage(1);
             }}
-            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
+            className="rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-sm outline-none ring-brand-500 focus:ring-2"
           >
             {PAGE_SIZES.map((size) => (
               <option key={size} value={size}>
@@ -111,9 +111,9 @@ export function DataTable<T>({ rows, columns, rowKey, initialPageSize = 10 }: Pr
         </label>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border bg-white">
+      <div className="brand-card overflow-x-auto rounded-[1.75rem] border border-white/70">
       <table className="min-w-full text-sm">
-        <thead className="bg-slate-100 text-left text-slate-700">
+        <thead className="bg-slate-100/80 text-left text-slate-700">
           <tr>
             {normalizedColumns.map((column) => (
               <th key={column.header} className="px-4 py-3 font-semibold">
@@ -121,7 +121,7 @@ export function DataTable<T>({ rows, columns, rowKey, initialPageSize = 10 }: Pr
               </th>
             ))}
           </tr>
-          <tr className="border-t bg-white">
+          <tr className="border-t border-slate-200/80 bg-white/90">
             {normalizedColumns.map((column) => (
               <th key={`${column.header}-filter`} className="px-4 py-3">
                 {column.filterable ? (
@@ -135,7 +135,7 @@ export function DataTable<T>({ rows, columns, rowKey, initialPageSize = 10 }: Pr
                       setPage(1);
                     }}
                     placeholder={`Filter ${column.header}`}
-                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs outline-none ring-brand-500 focus:ring-2"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs outline-none ring-brand-500 focus:ring-2"
                   />
                 ) : (
                   <span className="text-xs text-slate-400">No filter</span>
@@ -146,7 +146,7 @@ export function DataTable<T>({ rows, columns, rowKey, initialPageSize = 10 }: Pr
         </thead>
         <tbody>
           {paginatedRows.map((row) => (
-            <tr key={rowKey(row)} className="border-t">
+            <tr key={rowKey(row)} className="border-t border-slate-200/80 hover:bg-brand-50/30">
               {normalizedColumns.map((column) => (
                 <td key={column.header} className="px-4 py-3 align-top">
                   {column.render ? column.render(row) : String(row[column.key as keyof T] ?? "")}
@@ -165,7 +165,7 @@ export function DataTable<T>({ rows, columns, rowKey, initialPageSize = 10 }: Pr
       </table>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-xl border bg-white p-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+      <div className="brand-card flex flex-col gap-3 rounded-[1.5rem] border border-white/70 p-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
         <p>
           Showing {(currentPage - 1) * pageSize + (paginatedRows.length ? 1 : 0)}-
           {(currentPage - 1) * pageSize + paginatedRows.length} of {filteredRows.length}
@@ -175,7 +175,7 @@ export function DataTable<T>({ rows, columns, rowKey, initialPageSize = 10 }: Pr
             type="button"
             onClick={() => setPage((prev) => Math.max(1, prev - 1))}
             disabled={currentPage === 1}
-            className="rounded-md border px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-full border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Previous
           </button>
@@ -186,7 +186,7 @@ export function DataTable<T>({ rows, columns, rowKey, initialPageSize = 10 }: Pr
             type="button"
             onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
             disabled={currentPage === totalPages}
-            className="rounded-md border px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-full border border-slate-200 px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Next
           </button>

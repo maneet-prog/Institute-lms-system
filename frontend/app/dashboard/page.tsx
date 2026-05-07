@@ -23,5 +23,5 @@ export default function DashboardEntryPage() {
     }
   }, [pathname, role, router, startNavigation]);
 
-  return <p className="text-sm text-slate-600">Redirecting...</p>;
+  return <p className="text-sm text-slate-600">Opening your TecOnline workspace...</p>;
 }

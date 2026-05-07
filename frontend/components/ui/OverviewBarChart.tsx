@@ -25,10 +25,10 @@ export function OverviewBarChart({
   );
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="brand-card rounded-[1.75rem] border border-white/70 p-6 shadow-xl shadow-slate-200/40">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+          <h3 className="text-lg font-semibold text-[#A93A30]">{title}</h3>
           <p className="mt-1 text-sm text-slate-600">{subtitle}</p>
         </div>
         <div className="flex flex-wrap gap-3 text-xs text-slate-500">
@@ -51,12 +51,12 @@ export function OverviewBarChart({
           <div key={point.label} className="flex flex-col items-center gap-2">
             <div className="flex h-40 items-end gap-1">
               <div
-                className="w-4 rounded-t-full bg-brand-500"
+                className="w-4 rounded-t-full bg-gradient-to-t from-brand-700 to-brand-500"
                 style={{ height: point.value > 0 ? `${Math.max(8, (point.value / maxValue) * 100)}%` : "0%" }}
                 title={`${primaryLabel}: ${point.value}`}
               />
               <div
-                className="w-4 rounded-t-full bg-emerald-400"
+                className="w-4 rounded-t-full bg-gradient-to-t from-[#f0b44c] to-[#ffd485]"
                 style={{
                   height:
                     (point.secondaryValue || 0) > 0

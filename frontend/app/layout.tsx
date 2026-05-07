@@ -6,8 +6,8 @@ import { Toaster } from "@/components/ui/Toaster";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Institute LMS",
-  description: "Multi-tenant institute LMS with role-based dashboards, batch delivery, and TalentLMS-style service coverage."
+  title: "TecOnline Campus",
+  description: "TecOnline Campus by Tajinder's English Classes for coaching delivery, exam practice, learner progress, and branch operations."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

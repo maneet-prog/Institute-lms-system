@@ -5,10 +5,11 @@ import { Card } from "@/components/ui/Card";
 
 export default function LoginPage() {
   return (
-    <section className="page-shell max-w-md">
+    <section className="max-w-md">
       <Card>
-        <h1 className="mb-2 text-2xl font-semibold">Login</h1>
-        <p className="mb-4 text-sm text-slate-600">Access your LMS dashboard based on your role.</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-700">Welcome Back</p>
+        <h1 className="mb-2 mt-2 text-2xl font-semibold text-[#A93A30]">Login to TecOnline Campus</h1>
+        <p className="mb-4 text-sm text-slate-600">Access your dashboard, batches, resources, and exam workspaces based on your role.</p>
         <LoginForm />
         <p className="mt-4 text-sm text-slate-600">
           Forgot your password?{" "}

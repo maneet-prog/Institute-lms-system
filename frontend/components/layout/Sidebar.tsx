@@ -17,13 +17,7 @@ export function Sidebar() {
   const navGroups = role ? NAV_BY_ROLE[role] : [];
 
   return (
-    <aside className="w-full border-r bg-white p-4 lg:w-80">
-      <div className="mb-6 rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50 to-white p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-500">Admin Panel</p>
-        <h2 className="mt-2 text-lg font-semibold text-brand-700">Management Console</h2>
-        <p className="mt-1 text-sm text-slate-600">Navigate institute records, courses, subcourses, and users.</p>
-      </div>
-
+    <aside className="w-full border-b border-white/60 bg-white/65 p-4 backdrop-blur-xl lg:w-80 lg:border-b-0 lg:border-r">
       <nav className="space-y-5">
         {navGroups.map((group) => (
           <div key={group.title}>
@@ -40,10 +34,10 @@ export function Sidebar() {
                   <AppLink
                     key={item.href}
                     href={item.href}
-                    className={`block rounded-xl border px-3 py-3 text-sm transition ${
+                    className={`block rounded-2xl border px-4 py-3 text-sm transition ${
                       isActive
-                        ? "border-brand-200 bg-brand-50 text-brand-700 shadow-sm"
-                        : "border-transparent hover:border-slate-200 hover:bg-slate-50"
+                        ? "border-brand-100 bg-white text-brand-700 shadow-lg shadow-brand-100/40"
+                        : "border-transparent bg-white/70 hover:border-slate-200 hover:bg-white"
                     }`}
                   >
                     <span className="block font-medium">{item.label}</span>
