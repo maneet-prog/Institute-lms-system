@@ -3,9 +3,14 @@
 import { useMemo } from "react";
 import { useParams } from "next/navigation";
 
+import { AppLink } from "@/components/navigation/AppLink";
 import { ContentRenderer } from "@/components/content/ContentRenderer";
 import { Card } from "@/components/ui/Card";
 import { useStudentBatchWorkspaceQuery } from "@/hooks/useLmsQueries";
+
+function formatScore(value: number | null | undefined, maxScore: number) {
+  return maxScore > 0 ? `${value ?? 0}/${maxScore}` : String(value ?? 0);
+}
 
 export default function StudentModuleDetailPage() {
   const params = useParams<{ batchId: string; moduleId: string }>();
@@ -15,6 +20,8 @@ export default function StudentModuleDetailPage() {
     () => data?.modules.find((entry) => entry.module_id === params.moduleId) ?? null,
     [data, params.moduleId]
   );
+  const buildCourseExamHref = (contentId: string) =>
+    `/course/${data?.course_id}/${data?.subcourse_id}/${params.moduleId}?batch_id=${params.batchId}&content_id=${contentId}&autostart=1`;
 
   if (isLoading) {
     return <p className="text-sm text-slate-600">Loading module details...</p>;
@@ -38,6 +45,13 @@ export default function StudentModuleDetailPage() {
         {moduleDetail.content.map((item, index) => (
           <details key={item.content_id} open={index === 0} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <summary className="cursor-pointer list-none">
+              {(() => {
+                const isDynamicExam =
+                  item.type === "quiz" &&
+                  (item.quiz?.renderer?.kind === "tecai_reading" || item.quiz?.renderer?.kind === "tecai_writing");
+
+                return (
+                  <>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-lg font-semibold text-slate-900">{item.title}</p>
@@ -45,10 +59,23 @@ export default function StudentModuleDetailPage() {
                     {item.type} | {item.category} | {item.duration} min
                   </p>
                 </div>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                  {item.submission ? "Submitted" : "Open Content"}
-                </span>
+                <div className="flex items-center gap-3">
+                  {/* {isDynamicExam ? (
+                    <AppLink
+                      href={buildCourseExamHref(item.content_id)}
+                      className="rounded-md border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Open Exam
+                    </AppLink>
+                  ) : null} */}
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                    {item.submission ? "Submitted" : "Open Content"}
+                  </span>
+                </div>
               </div>
+                  </>
+                );
+              })()}
             </summary>
 
             <div className="mt-4 space-y-4">
@@ -58,9 +85,10 @@ export default function StudentModuleDetailPage() {
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
                   <p className="font-semibold">Latest submission status: {item.submission.review_status}</p>
                   <p className="mt-1">
-                    Attempt {item.submission.latest_attempt_number} | Marks {item.submission.latest_awarded_marks ?? item.submission.latest_auto_score}
-                    /{item.submission.max_score}
+                    Attempt {item.submission.latest_attempt_number} | Marks{" "}
+                    {formatScore(item.submission.latest_awarded_marks ?? item.submission.latest_auto_score, item.submission.max_score)}
                   </p>
+                  {item.submission.feedback ? <p className="mt-1">Feedback: {item.submission.feedback}</p> : null}
                 </div>
               ) : null}
             </div>

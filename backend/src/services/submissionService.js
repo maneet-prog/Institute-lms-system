@@ -50,7 +50,8 @@ const listSubmissions = async ({ batchId, userId, courseId }, user, tenant) => {
 
   const contents = await Content.find({
     instituteId,
-    batchId: { $in: contentFilterBatchIds }
+    batchId: { $in: contentFilterBatchIds },
+    active: true
   }).lean();
   if (!contents.length) {
     return [];

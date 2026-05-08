@@ -34,7 +34,7 @@ export default function StudentModulesPage() {
         {modules.map((module) => (
           <Card key={`${module.batch_id}-${module.module_id}`}>
             <h2 className="text-lg font-semibold">{module.module_name}</h2>
-            <p className="text-xs text-slate-500">{module.batch_name} | {module.module_id}</p>
+            <p className="text-xs text-slate-500">{module.batch_name}</p>
             <div className="mt-3 space-y-2 text-sm text-slate-600">
               <p>{module.content.length} content items available in this module.</p>
               <p>

@@ -66,19 +66,24 @@ export function ContentRenderer({ content }: { content: Content | StudentWorkspa
   }
 
   if (content.type === "quiz") {
-    if (content.quiz?.renderer?.kind === "tecai_reading") {
+    if (
+      content.quiz?.renderer?.kind === "tecai_reading" ||
+      content.quiz?.renderer?.kind === "tecai_writing"
+    ) {
       const submission = "submission" in content ? content.submission : null;
       const attemptLimit = content.quiz.attempt_limit ?? 999;
       const attemptsUsed = submission?.attempts.length ?? 0;
       const canStart = !("submission" in content) || attemptsUsed < attemptLimit;
+      const examLabel =
+        content.quiz.renderer.kind === "tecai_writing" ? "TECAI Writing Exam" : "TECAI Reading Exam";
 
       return (
         <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-slate-900">TECAI Reading Exam</p>
+              <p className="text-sm font-semibold text-slate-900">{examLabel}</p>
               <p className="mt-1 text-sm text-slate-600">
-                Opens the exact standalone exam renderer in a new browser tab.
+                Opens the standalone module renderer in a new browser tab.
               </p>
             </div>
             <Button

@@ -10,6 +10,7 @@ const progressRoutes = require("./progressRoutes");
 const studentRoutes = require("./studentRoutes");
 const submissionRoutes = require("./submissionRoutes");
 const resourceRoutes = require("./resourceRoutes");
+const examRoutes = require("./examRoutes");
 
 const router = express.Router();
 router.use("/auth", authRoutes);
@@ -19,6 +20,7 @@ router.use("/progress", progressRoutes);
 router.use("/students", studentRoutes);
 router.use("/submissions", submissionRoutes);
 router.use("/resources", resourceRoutes);
+router.use("/", examRoutes);
 router.use("/", courseRoutes);
 router.use("/", contentRoutes);
 router.use("/", enrollmentRoutes);

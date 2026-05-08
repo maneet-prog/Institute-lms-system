@@ -54,15 +54,70 @@ const serializeModule = (module) => ({
   subcourse_id: asId(module.subcourseId),
   institute_id: asId(module.instituteId),
   module_name: module.moduleName,
+  exam_type: module.examType ?? "general",
   active: module.active
 });
+
+const serializeExamAsset = (asset) => ({
+  asset_id: asset?.assetId || asset?.asset_id || null,
+  type: asset?.type || "text",
+  title: asset?.title ?? null,
+  url: asset?.url ?? null,
+  content: asset?.content ?? null,
+  mime_type: asset?.mimeType ?? asset?.mime_type ?? null,
+  meta: asset?.meta ?? null
+});
+
+const serializeExamPart = (part) => ({
+  part_id: part?.partId || part?.part_id || null,
+  title: part?.title || "",
+  kind: part?.kind || "part",
+  instructions: part?.instructions ?? null,
+  timer_seconds: part?.timerSeconds ?? part?.timer_seconds ?? 0,
+  passages: (part?.passages || []).map(serializeExamAsset),
+  audio: (part?.audio || []).map(serializeExamAsset),
+  images: (part?.images || []).map(serializeExamAsset),
+  resources: (part?.resources || []).map(serializeExamAsset),
+  questions: (part?.questions || []).map((question) => ({
+    question_id: question?.questionId || question?.question_id || null,
+    type: question?.type || "written",
+    prompt: question?.prompt || "",
+    instructions: question?.instructions ?? null,
+    options: (question?.options || []).map((option) => ({
+      option_id: option.optionId || option.option_id || null,
+      text: option.text || ""
+    })),
+    answer_data: question?.answerData ?? question?.answer_data ?? null,
+    answer_key: question?.answerKey ?? question?.answer_key ?? null,
+    max_marks: question?.maxMarks ?? question?.max_marks ?? 0,
+    order_index: question?.orderIndex ?? question?.order_index ?? 0
+  })),
+  answer_data: part?.answerData ?? part?.answer_data ?? null,
+  order_index: part?.orderIndex ?? part?.order_index ?? 0
+});
+
+const serializeExamProfile = (exam) =>
+  exam
+    ? {
+        exam_type_id: asId(exam.examTypeId),
+        module_id: asId(exam.moduleId),
+        module_code: exam.moduleCode ?? null,
+        module_label: exam.moduleLabel ?? null,
+        renderer_kind: exam.rendererKind ?? null,
+        timer_seconds: exam.timerSeconds ?? 0,
+        parts: (exam.parts || []).map(serializeExamPart),
+        metadata: exam.metadata ?? null
+      }
+    : null;
 
 const serializeContent = (content, options = {}) => ({
   content_id: asId(content._id),
   institute_id: asId(content.instituteId),
   module_id: asId(content.moduleId),
   batch_id: asId(content.batchId),
+  source_content_id: asId(content.sourceContentId),
   created_by: asId(content.createdBy),
+  is_reusable_template: Boolean(content.isReusableTemplate),
   title: content.title,
   type: content.type,
   description: content.description ?? null,
@@ -73,11 +128,17 @@ const serializeContent = (content, options = {}) => ({
   category: content.profile?.category ?? "reading",
   body_text: content.description ?? null,
   instructions: content.profile?.instructions ?? null,
-  downloadable: Boolean(content.profile?.downloadable),
   response_type: content.profile?.responseType ?? null,
+  visibility_scope: content.visibilityScope ?? "batch",
+  assigned_student_ids: (content.assignedStudentIds || []).map(asId).filter(Boolean),
+  exam: serializeExamProfile(content.profile?.exam),
   quiz:
     content.profile?.quiz &&
-    (Array.isArray(content.profile.quiz.questions) || content.profile.quiz.renderer?.kind === "tecai_reading")
+    (
+      Array.isArray(content.profile.quiz.questions) ||
+      content.profile.quiz.renderer?.kind === "tecai_reading" ||
+      content.profile.quiz.renderer?.kind === "tecai_writing"
+    )
       ? {
           mode: content.profile.quiz.mode || "mcq",
           attempt_limit: content.profile.quiz.attemptLimit ?? 999,
@@ -162,6 +223,8 @@ const serializeStudentSubmission = (submission) => ({
     response_type: attempt.responseType,
     response_text: attempt.responseText ?? null,
     response_url: attempt.responseUrl ?? null,
+    renderer_kind: attempt.rendererKind ?? null,
+    time_taken_seconds: attempt.timeTakenSeconds ?? 0,
     auto_score: attempt.autoScore ?? 0,
     awarded_marks: attempt.awardedMarks ?? null,
     max_score: attempt.maxScore ?? 0,
@@ -170,6 +233,14 @@ const serializeStudentSubmission = (submission) => ({
     reviewed_at: attempt.reviewedAt ?? null,
     reviewed_by: asId(attempt.reviewedBy),
     submitted_at: attempt.submittedAt,
+    exam_responses: (attempt.examResponses || []).map((response) => ({
+      part_id: response.partId ?? null,
+      question_id: response.questionId ?? null,
+      response_text: response.responseText ?? null,
+      response_data: response.responseData ?? null,
+      word_count: response.wordCount ?? 0,
+      duration_seconds: response.durationSeconds ?? 0
+    })),
     answers: (attempt.answers || []).map((answer) => ({
       question_id: answer.questionId,
       prompt: answer.prompt,
@@ -202,6 +273,7 @@ module.exports = {
   serializeCourse,
   serializeSubcourse,
   serializeModule,
+  serializeExamProfile,
   serializeContent,
   serializeBatch,
   serializeUserCourse,

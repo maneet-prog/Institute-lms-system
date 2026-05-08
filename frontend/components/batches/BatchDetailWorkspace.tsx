@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { ModuleCatalogTable } from "@/components/content/ModuleCatalogTable";
 import { CourseManagementForms } from "@/components/forms/CourseManagementForms";
 import { ModuleContentList } from "@/components/content/ModuleContentList";
 import { DataTable } from "@/components/tables/DataTable";
@@ -105,12 +106,10 @@ export function BatchDetailWorkspace({ batchId, instituteId, badge }: Props) {
         <Card>
           <h2 className="text-lg font-semibold">Course</h2>
           <p className="mt-3 text-sm text-slate-700">{data.course.course_name}</p>
-          <p className="text-xs text-slate-500">{data.course.course_id}</p>
         </Card>
         <Card>
           <h2 className="text-lg font-semibold">SubCourse</h2>
           <p className="mt-3 text-sm text-slate-700">{data.subcourse.subcourse_name}</p>
-          <p className="text-xs text-slate-500">{data.subcourse.subcourse_id}</p>
         </Card>
         <Card>
           <h2 className="text-lg font-semibold">Batch Details</h2>
@@ -188,15 +187,30 @@ export function BatchDetailWorkspace({ batchId, instituteId, badge }: Props) {
           Review every module and its content inside this batch path.
         </p>
         <div className="mt-4">
-          <DataTable
-            rows={modules}
-            rowKey={(row) => row.module_id}
-            initialPageSize={5}
-            columns={[
-              { key: "module_name", header: "Module" },
-              { key: "module_id", header: "Module ID" },
-              { key: "active", header: "Active", render: (row) => (row.active ? "Yes" : "No") }
+          <ModuleCatalogTable
+            modules={modules}
+            courses={[
+              {
+                course_id: data.course.course_id,
+                course_name: data.course.course_name,
+                institute_id: effectiveInstituteId ?? "",
+                active: true
+              }
             ]}
+            subcourses={[
+              {
+                subcourse_id: data.subcourse.subcourse_id,
+                subcourse_name: data.subcourse.subcourse_name,
+                course_id: data.course.course_id,
+                institute_id: effectiveInstituteId ?? "",
+                active: true
+              }
+            ]}
+            instituteId={effectiveInstituteId}
+            disableCoursePathSelection
+            defaultCourseId={data.course.course_id}
+            defaultSubcourseId={data.subcourse.subcourse_id}
+            canManage={canManageContent}
           />
         </div>
 
@@ -206,7 +220,6 @@ export function BatchDetailWorkspace({ batchId, instituteId, badge }: Props) {
               <div key={module.module_id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="mb-3">
                   <p className="text-base font-semibold text-slate-900">{module.module_name}</p>
-                  <p className="text-sm text-slate-500">Module ID: {module.module_id}</p>
                 </div>
                 <ModuleContentList
                   moduleId={module.module_id}

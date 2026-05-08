@@ -3,6 +3,7 @@ const { DOMParser } = require("@xmldom/xmldom");
 const AppError = require("./AppError");
 
 const TECAI_READING_KIND = "tecai_reading";
+const TECAI_WRITING_KIND = "tecai_writing";
 const DEFAULT_TIMER_SECONDS = 3600;
 
 const normalizeParagraph = (paragraph) => ({
@@ -12,16 +13,58 @@ const normalizeParagraph = (paragraph) => ({
 });
 
 const sanitizeRenderer = (renderer) => {
-  if (!renderer || renderer.kind !== TECAI_READING_KIND || !Array.isArray(renderer.paragraphs)) {
+  if (!renderer || typeof renderer !== "object") {
     return null;
   }
 
-  return {
-    kind: TECAI_READING_KIND,
-    timer_seconds:
-      Number(renderer.timer_seconds || renderer.timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS,
-    paragraphs: renderer.paragraphs.map(normalizeParagraph)
-  };
+  if (renderer.kind === TECAI_READING_KIND && Array.isArray(renderer.paragraphs)) {
+    return {
+      kind: TECAI_READING_KIND,
+      timer_seconds:
+        Number(renderer.timer_seconds || renderer.timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS,
+      paragraphs: renderer.paragraphs.map(normalizeParagraph)
+    };
+  }
+
+  if (renderer.kind === TECAI_WRITING_KIND && Array.isArray(renderer.parts)) {
+    return {
+      kind: TECAI_WRITING_KIND,
+      timer_seconds:
+        Number(renderer.timer_seconds || renderer.timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS,
+      instructions: typeof renderer.instructions === "string" ? renderer.instructions : "",
+      parts: renderer.parts.map((part, index) => ({
+        part_id: String(part.part_id || part.partId || `part-${index + 1}`),
+        title: String(part.title || `Task ${index + 1}`),
+        kind: String(part.kind || "task"),
+        instructions: typeof part.instructions === "string" ? part.instructions : "",
+        prompt_html: typeof part.prompt_html === "string" ? part.prompt_html : "",
+        prompt_text: typeof part.prompt_text === "string" ? part.prompt_text : "",
+        minimum_words: Math.max(0, Number(part.minimum_words || part.minimumWords || 0) || 0),
+        placeholder:
+          typeof part.placeholder === "string" ? part.placeholder : "Start writing your response here...",
+        resources: Array.isArray(part.resources)
+          ? part.resources.map((resource, resourceIndex) => ({
+              asset_id: String(resource.asset_id || resource.assetId || `asset-${index + 1}-${resourceIndex + 1}`),
+              type: String(resource.type || "text"),
+              title: typeof resource.title === "string" ? resource.title : "",
+              url: typeof resource.url === "string" ? resource.url : "",
+              content: typeof resource.content === "string" ? resource.content : ""
+            }))
+          : []
+      }))
+    };
+  }
+
+  if (renderer.kind === TECAI_WRITING_KIND && Array.isArray(renderer.blocks)) {
+    return {
+      kind: TECAI_WRITING_KIND,
+      timer_seconds:
+        Number(renderer.timer_seconds || renderer.timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS,
+      blocks: renderer.blocks.map(normalizeParagraph)
+    };
+  }
+
+  return null;
 };
 
 const getDataUriMimeType = (path = "") => {
@@ -98,6 +141,25 @@ const getRelationships = async (zip) => {
   const relsXml = await relsFile.async("text");
   const relsDoc = new DOMParser().parseFromString(relsXml, "text/xml");
   return Array.from(relsDoc.getElementsByTagName("Relationship"));
+};
+
+const getImageHtml = async (drawingNode, zip, relationships) => {
+  const blip = drawingNode.getElementsByTagName("a:blip")[0];
+  if (!blip) return "";
+
+  const embed = blip.getAttribute("r:embed");
+  const relationship = relationships.find((item) => item.getAttribute("Id") === embed);
+  if (!relationship) return "";
+
+  const target = relationship.getAttribute("Target");
+  if (!target) return "";
+
+  const imgFile = zip.file(`word/${target}`);
+  if (!imgFile) return "";
+
+  const base64 = await imgFile.async("base64");
+  const mimeType = getDataUriMimeType(target);
+  return `<br><img src="data:${mimeType};base64,${base64}">`;
 };
 
 const renderTable = async (tblNode, zip, state, relationships) => {
@@ -194,6 +256,11 @@ const parseDocument = async (xml, zip) => {
         if (run.getElementsByTagName("w:u").length) value = `<u>${value}</u>`;
 
         html += value;
+
+        const drawings = Array.from(run.getElementsByTagName("w:drawing"));
+        for (const drawing of drawings) {
+          html += await getImageHtml(drawing, zip, relationships);
+        }
       }
 
       content.push({ type: "p", text: text.trim(), html });
@@ -234,9 +301,37 @@ const buildTecaiQuizFromDocx = async (file) => {
   };
 };
 
+const buildTecaiWritingQuizFromDocx = async (file) => {
+  if (!file?.buffer) {
+    throw new AppError("Upload a DOCX file to generate the TECAI writing exam.", 400);
+  }
+
+  const zip = await JSZip.loadAsync(file.buffer);
+  const documentFile = zip.file("word/document.xml");
+  if (!documentFile) {
+    throw new AppError("The uploaded DOCX file is missing word/document.xml.", 400);
+  }
+
+  const xml = await documentFile.async("string");
+  const blocks = await parseDocument(xml, zip);
+
+  return {
+    mode: "written",
+    attemptLimit: 1,
+    questions: [],
+    renderer: {
+      kind: TECAI_WRITING_KIND,
+      timer_seconds: DEFAULT_TIMER_SECONDS,
+      blocks
+    }
+  };
+};
+
 module.exports = {
   TECAI_READING_KIND,
+  TECAI_WRITING_KIND,
   DEFAULT_TIMER_SECONDS,
   buildTecaiQuizFromDocx,
+  buildTecaiWritingQuizFromDocx,
   sanitizeRenderer
 };

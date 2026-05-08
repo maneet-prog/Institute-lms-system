@@ -65,6 +65,7 @@ export interface Module {
   subcourse_id: string;
   institute_id: string;
   module_name: string;
+  exam_type: "reading" | "writing" | "listening" | "speaking" | "general";
   active: boolean;
 }
 
@@ -79,18 +80,81 @@ export interface TecaiParagraph {
   text: string;
 }
 
-export interface TecaiQuizRenderer {
+export interface TecaiReadingRenderer {
   kind: "tecai_reading";
   timer_seconds: number;
   paragraphs: TecaiParagraph[];
 }
 
+export interface ExamAsset {
+  asset_id: string | null;
+  type: string;
+  title?: string | null;
+  url?: string | null;
+  content?: string | null;
+  mime_type?: string | null;
+  meta?: Record<string, unknown> | null;
+}
+
+export interface ExamPart {
+  part_id: string | null;
+  title: string;
+  kind: "part" | "section" | "task" | string;
+  instructions?: string | null;
+  timer_seconds: number;
+  passages: ExamAsset[];
+  audio: ExamAsset[];
+  images: ExamAsset[];
+  resources: ExamAsset[];
+  questions: Array<{
+    question_id: string | null;
+    type: string;
+    prompt: string;
+    instructions?: string | null;
+    options: QuizOption[];
+    answer_data?: Record<string, unknown> | null;
+    answer_key?: Record<string, unknown> | null;
+    max_marks: number;
+    order_index: number;
+  }>;
+  answer_data?: Record<string, unknown> | null;
+  order_index: number;
+}
+
+export interface TecaiWritingRenderer {
+  kind: "tecai_writing";
+  timer_seconds: number;
+  instructions?: string;
+  blocks?: TecaiParagraph[];
+  parts?: Array<{
+    part_id: string;
+    title: string;
+    kind: string;
+    instructions?: string;
+    prompt_html?: string;
+    prompt_text?: string;
+    minimum_words: number;
+    placeholder?: string;
+    resources: Array<{
+      asset_id: string;
+      type: string;
+      title?: string;
+      url?: string;
+      content?: string;
+    }>;
+  }>;
+}
+
+export type TecaiQuizRenderer = TecaiReadingRenderer | TecaiWritingRenderer;
+
 export interface Content {
   content_id: string;
   institute_id: string;
   module_id: string;
-  batch_id: string;
+  batch_id: string | null;
+  source_content_id?: string | null;
   created_by?: string | null;
+  is_reusable_template?: boolean;
   title: string;
   type: string;
   description?: string | null;
@@ -101,8 +165,19 @@ export interface Content {
   category?: string;
   body_text?: string | null;
   instructions?: string | null;
-  downloadable?: boolean;
   response_type?: string | null;
+  visibility_scope?: "batch" | "selected_students";
+  assigned_student_ids?: string[];
+  exam?: {
+    exam_type_id?: string | null;
+    module_id?: string | null;
+    module_code?: string | null;
+    module_label?: string | null;
+    renderer_kind?: string | null;
+    timer_seconds: number;
+    parts: ExamPart[];
+    metadata?: Record<string, unknown> | null;
+  } | null;
   quiz?: {
     mode: "mcq" | "written" | "mixed";
     attempt_limit: number;
@@ -204,6 +279,8 @@ export interface StudentSubmission {
     response_type: string;
     response_text?: string | null;
     response_url?: string | null;
+    renderer_kind?: string | null;
+    time_taken_seconds?: number;
     auto_score: number;
     awarded_marks?: number | null;
     max_score: number;
@@ -212,6 +289,14 @@ export interface StudentSubmission {
     reviewed_at?: string | null;
     reviewed_by?: string | null;
     submitted_at: string;
+    exam_responses: Array<{
+      part_id?: string | null;
+      question_id?: string | null;
+      response_text?: string | null;
+      response_data?: Record<string, unknown> | null;
+      word_count: number;
+      duration_seconds: number;
+    }>;
     answers: Array<{
       question_id: string;
       prompt: string;
@@ -233,6 +318,23 @@ export interface StudentWorkspaceContent extends Content {
 }
 
 export interface TecaiExamData {
+  content: Content;
+  renderer: TecaiQuizRenderer;
+  student_name: string;
+  submission?: StudentSubmission | null;
+}
+
+export interface CourseModuleExamData {
+  route: {
+    course_id: string;
+    exam_type_id: string;
+    module_id: string;
+    batch_id?: string | null;
+    content_id: string;
+  };
+  course: Course;
+  exam_type: SubCourse;
+  module: Module;
   content: Content;
   renderer: TecaiQuizRenderer;
   student_name: string;

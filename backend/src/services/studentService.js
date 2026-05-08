@@ -7,12 +7,17 @@ const { UserBatch, UserCourse, UserModule, UserContent } = require("../models/En
 const AppError = require("../utils/AppError");
 const { serializeContent, serializeStudentSubmission } = require("../utils/serializers");
 const { gradeQuizSubmission, resolveQuizFromContent } = require("../utils/quiz");
+const { TECAI_WRITING_KIND } = require("../utils/tecaiReading");
 
 const getInstituteId = (user, tenant) => tenant?.instituteId || user?.instituteId || null;
 const average = (values) =>
   values.length ? Math.round(values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length) : 0;
 const formatChartLabel = (date) =>
   new Date(date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+const isContentVisibleToStudent = (content, userId) =>
+  content.active !== false &&
+  (content.visibilityScope !== "selected_students" ||
+    (content.assignedStudentIds || []).some((studentId) => String(studentId) === String(userId)));
 
 const getLastAttempt = (submission) => {
   const attempts = submission?.attempts || [];
@@ -156,15 +161,20 @@ const getModulesContent = async (user, tenant) => {
       const contents = await Content.find({
         moduleId: moduleItem._id,
         batchId: batch.batch_id,
-        instituteId
+        instituteId,
+        active: true
       }).sort({ orderIndex: 1, createdAt: 1, _id: 1 });
 
+      const visibleContents = contents.filter((content) => isContentVisibleToStudent(content, user._id));
+      if (!visibleContents.length) {
+        continue;
+      }
       output.push({
         batch_id: batch.batch_id,
         batch_name: batch.batch_name,
         module_id: String(moduleItem._id),
         module_name: moduleItem.moduleName,
-        content: contents.map((content) => serializeContent(content, { includeQuizAnswers: false }))
+        content: visibleContents.map((content) => serializeContent(content, { includeQuizAnswers: false }))
       });
     }
   }
@@ -178,7 +188,8 @@ const getModulesContent = async (user, tenant) => {
   if (assignedContents.length) {
     const contents = await Content.find({
       _id: { $in: assignedContents.map((ac) => ac.contentId) },
-      instituteId
+      instituteId,
+      active: true
     }).sort({ createdAt: -1 });
 
     if (contents.length) {
@@ -245,25 +256,27 @@ const getBatchWorkspace = async (batchId, category, user, tenant) => {
     ? await Content.find({
         instituteId,
         batchId: batch.batch_id,
-        moduleId: { $in: modules.map((moduleItem) => moduleItem._id) }
+        moduleId: { $in: modules.map((moduleItem) => moduleItem._id) },
+        active: true
       }).sort({ orderIndex: 1, createdAt: 1, _id: 1 })
     : [];
+  const visibleContents = contents.filter((content) => isContentVisibleToStudent(content, user._id));
 
-  const submissions = contents.length
+  const submissions = visibleContents.length
     ? await StudentSubmission.find({
         userId: user._id,
         instituteId,
-        contentId: { $in: contents.map((content) => content._id) }
+        contentId: { $in: visibleContents.map((content) => content._id) }
       })
     : [];
   const submissionsByContent = new Map(
     submissions.map((submission) => [String(submission.contentId), serializeStudentSubmission(submission)])
   );
 
-  const availableCategories = [...new Set(contents.map((content) => content.profile?.category).filter(Boolean))].sort();
+  const availableCategories = [...new Set(visibleContents.map((content) => content.profile?.category).filter(Boolean))].sort();
   const filteredContents = category
-    ? contents.filter((content) => content.profile?.category === category)
-    : contents;
+    ? visibleContents.filter((content) => content.profile?.category === category)
+    : visibleContents;
 
   const contentByModule = new Map();
   for (const content of filteredContents) {
@@ -364,12 +377,14 @@ const getDashboard = async (user, tenant) => {
     ? await Content.find({
         instituteId,
         batchId: { $in: batchIds },
-        moduleId: { $in: moduleIds }
+        moduleId: { $in: moduleIds },
+        active: true
       })
-        .select("moduleId batchId title duration type")
+        .select("moduleId batchId title duration type visibilityScope assignedStudentIds")
         .sort({ orderIndex: 1, createdAt: 1, _id: 1 })
         .lean()
     : [];
+  const visibleContents = contents.filter((content) => isContentVisibleToStudent(content, user._id));
   const progressRows = moduleIds.length
     ? await UserProgress.find({
         instituteId,
@@ -377,11 +392,11 @@ const getDashboard = async (user, tenant) => {
         moduleId: { $in: moduleIds }
       }).lean()
     : [];
-  const submissions = contents.length
+  const submissions = visibleContents.length
     ? await StudentSubmission.find({
         instituteId,
         userId: user._id,
-        contentId: { $in: contents.map((content) => content._id) }
+        contentId: { $in: visibleContents.map((content) => content._id) }
       }).lean()
     : [];
 
@@ -394,7 +409,7 @@ const getDashboard = async (user, tenant) => {
   }
 
   const contentByBatchModule = new Map();
-  for (const content of contents) {
+  for (const content of visibleContents) {
     const key = `${String(content.batchId)}::${String(content.moduleId)}`;
     const current = contentByBatchModule.get(key) || {
       content_count: 0,
@@ -410,7 +425,7 @@ const getDashboard = async (user, tenant) => {
   }
 
   const progressByModule = new Map(progressRows.map((row) => [String(row.moduleId), row]));
-  const contentById = new Map(contents.map((content) => [String(content._id), content]));
+  const contentById = new Map(visibleContents.map((content) => [String(content._id), content]));
   const moduleById = new Map(modules.map((moduleItem) => [String(moduleItem._id), moduleItem]));
   const dashboardModules = [];
   const batchSummaries = [];
@@ -548,7 +563,7 @@ const submitContent = async (payload, user, tenant) => {
   }
 
   const content = await Content.findById(payload.content_id);
-  if (!content) throw new AppError("Content not found.", 400);
+  if (!content || !content.active) throw new AppError("Content not found.", 400);
 
   const batch = await Batch.findById(content.batchId);
   if (!batch) throw new AppError("Content not found.", 400);
@@ -560,16 +575,23 @@ const submitContent = async (payload, user, tenant) => {
     active: true
   });
   
-  if (!assignments.length) {
-    const userContent = await UserContent.findOne({
-      userId: user._id,
-      instituteId,
-      contentId: content._id,
-      active: true
-    });
-    if (!userContent) {
-      throw new AppError("Content access denied.", 403);
-    }
+  const userContent = await UserContent.findOne({
+    userId: user._id,
+    instituteId,
+    contentId: content._id,
+    active: true
+  });
+  const isDirectlyAssigned =
+    content.visibilityScope === "selected_students"
+      ? (content.assignedStudentIds || []).some((studentId) => String(studentId) === String(user._id))
+      : false;
+
+  if (!assignments.length && !userContent) {
+    throw new AppError("Content access denied.", 403);
+  }
+
+  if (content.visibilityScope === "selected_students" && !isDirectlyAssigned && !userContent) {
+    throw new AppError("Content access denied.", 403);
   }
 
   const existingSubmission = await StudentSubmission.findOne({
@@ -603,6 +625,61 @@ const submitContent = async (payload, user, tenant) => {
         responseText: payload.response_text,
         responseUrl: null,
         answers: [],
+        autoScore: 0,
+        awardedMarks: null,
+        maxScore: 0,
+        status: "submitted",
+        feedback: null,
+        reviewedAt: null,
+        reviewedBy: null,
+        submittedAt: new Date()
+      };
+
+      const submission = existingSubmission || new StudentSubmission({
+        instituteId,
+        contentId: payload.content_id,
+        userId: user._id
+      });
+
+      submission.responseType = "quiz";
+      submission.responseText = payload.response_text;
+      submission.responseUrl = null;
+      submission.submissionKind = "quiz";
+      submission.attempts = [...(submission.attempts || []), attempt];
+      submission.latestAttemptNumber = attemptNumber;
+      submission.latestAutoScore = 0;
+      submission.latestAwardedMarks = null;
+      submission.maxScore = 0;
+      submission.reviewStatus = "pending";
+      submission.feedback = null;
+      submission.reviewedAt = null;
+      submission.reviewedBy = null;
+      submission.submittedAt = attempt.submittedAt;
+      await submission.save();
+      return serializeStudentSubmission(submission);
+    }
+
+    if (quiz.renderer?.kind === TECAI_WRITING_KIND) {
+      if (!(payload.response_text || "").trim()) {
+        throw new AppError("Writing response is missing for this submission.", 400);
+      }
+
+      const attempt = {
+        attemptNumber,
+        responseType: "quiz",
+        responseText: payload.response_text,
+        responseUrl: null,
+        answers: [],
+        examResponses: (payload.exam_responses || []).map((response) => ({
+          partId: response.part_id || response.partId || null,
+          questionId: response.question_id || response.questionId || null,
+          responseText: response.response_text || response.responseText || null,
+          responseData: response.response_data || response.responseData || null,
+          wordCount: Number(response.word_count || response.wordCount || 0) || 0,
+          durationSeconds: Number(response.duration_seconds || response.durationSeconds || 0) || 0
+        })),
+        rendererKind: TECAI_WRITING_KIND,
+        timeTakenSeconds: Number(payload.time_taken_seconds || 0) || 0,
         autoScore: 0,
         awardedMarks: null,
         maxScore: 0,

@@ -3,7 +3,7 @@ const controller = require("../controllers/courseController");
 const validate = require("../middlewares/validateMiddleware");
 const { protect, allowRoles } = require("../middlewares/authMiddleware");
 const upload = require("../middlewares/uploadMiddleware");
-const { courseSchema, subcourseSchema, moduleSchema } = require("../validations/commonValidation");
+const { courseSchema, subcourseSchema, moduleSchema, moduleUpdateSchema } = require("../validations/commonValidation");
 
 const router = express.Router();
 
@@ -47,5 +47,7 @@ router.delete("/subcourses/:subcourseId", allowRoles("super_admin", "institute_a
 
 router.post("/modules", allowRoles("super_admin", "institute_admin", "teacher"), validate(moduleSchema), controller.addModule);
 router.get("/modules", allowRoles("super_admin", "institute_admin", "teacher", "student"), controller.getModules);
+router.put("/modules/:moduleId", allowRoles("super_admin", "institute_admin", "teacher"), validate(moduleUpdateSchema), controller.editModule);
+router.delete("/modules/:moduleId", allowRoles("super_admin", "institute_admin", "teacher"), controller.removeModule);
 
 module.exports = router;

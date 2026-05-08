@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { ModuleCatalogTable } from "@/components/content/ModuleCatalogTable";
 import { CourseManagementForms } from "@/components/forms/CourseManagementForms";
 import { CourseCatalogTables } from "@/components/tables/CourseCatalogTables";
 import { DataTable } from "@/components/tables/DataTable";
@@ -169,7 +170,6 @@ export function CourseManagementWorkspace({ badge, title, description }: Props) 
                 initialPageSize={5}
                 columns={[
                   { key: "subcourse_name", header: "SubCourse" },
-                  { key: "subcourse_id", header: "SubCourse ID" },
                   { key: "active", header: "Active", render: (row) => (row.active ? "Yes" : "No") }
                 ]}
               />
@@ -179,15 +179,11 @@ export function CourseManagementWorkspace({ badge, title, description }: Props) 
               {modulesLoading ? (
                 <p className="text-sm text-slate-500">Loading modules...</p>
               ) : (
-                <DataTable
-                  rows={selectedModules}
-                  rowKey={(row) => row.module_id}
-                  initialPageSize={5}
-                  columns={[
-                    { key: "module_name", header: "Module" },
-                    { key: "subcourse_id", header: "SubCourse ID" },
-                    { key: "active", header: "Active", render: (row) => (row.active ? "Yes" : "No") }
-                  ]}
+                <ModuleCatalogTable
+                  modules={selectedModules}
+                  courses={[selectedCourse]}
+                  subcourses={selectedSubcourses}
+                  canManage
                 />
               )}
             </div>

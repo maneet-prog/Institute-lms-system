@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 
 import { AppLink } from "@/components/navigation/AppLink";
 import { DataTable } from "@/components/tables/DataTable";
 import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
@@ -91,25 +93,26 @@ export function BatchCatalogTable({ batches, courses, subcourses, detailBasePath
             header: "Actions",
             render: (row) => (
               <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" onClick={() => openEdit(row)}>
-                  Edit
-                </Button>
-                <Button
+                <IconButton icon={<Pencil className="h-4 w-4" />} label={`Edit ${row.batch_name}`} onClick={() => openEdit(row)} />
+                <IconButton
                   variant="danger"
+                  icon={<Trash2 className="h-4 w-4" />}
+                  label={`Delete ${row.batch_name}`}
                   onClick={() => {
                     if (window.confirm(`Delete batch "${row.batch_name}"?`)) {
                       deleteBatch.mutate(row.batch_id);
                     }
                   }}
                   disabled={deleteBatch.isPending}
-                >
-                  Delete
-                </Button>
+                />
                 <AppLink
                   href={`${detailBasePath}/${row.batch_id}${instituteId ? `?instituteId=${instituteId}` : ""}`}
-                  className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-slate-100"
+                  aria-label={`View ${row.batch_name}`}
+                  title={`View ${row.batch_name}`}
+                  className="flex h-10 w-10 items-center justify-center rounded-2xl border px-0 py-0 text-sm font-medium hover:bg-slate-100"
                 >
-                  View Details
+                  <Eye className="h-4 w-4" />
+                  <span className="sr-only">View Details</span>
                 </AppLink>
               </div>
             )

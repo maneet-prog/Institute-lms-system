@@ -39,7 +39,7 @@ export function AssignResourceView() {
       : undefined
   );
 
-  const { data: contents = [] } = useModuleContentsQuery(selectedBatchId, selectedModuleId);
+  const { data: contents = [] } = useModuleContentsQuery(selectedModuleId, selectedBatchId);
 
   const studentOptions = useMemo(
     () => [
@@ -93,7 +93,7 @@ export function AssignResourceView() {
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-500">Resource Assignment</p>
         <h1 className="mt-2 text-2xl font-semibold">Assign Specific Exams</h1>
         <p className="mt-2 text-sm text-slate-600">
-          Select a student and assign specific exams or content directly to them, bypassing standard cohort enrollment.
+          Select a student and assign specific exams or content directly to them so it appears only in that student&apos;s workspace.
         </p>
       </Card>
 

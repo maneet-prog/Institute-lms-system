@@ -3,10 +3,12 @@
 import { AppLink } from "@/components/navigation/AppLink";
 import { DataTable } from "@/components/tables/DataTable";
 import { Card } from "@/components/ui/Card";
-import { useBatchesQuery } from "@/hooks/useLmsQueries";
+import { useBatchesQuery, useCoursesQuery, useSubCoursesQuery } from "@/hooks/useLmsQueries";
 
 export default function TeacherBatchesPage() {
   const { data: batches = [], isLoading } = useBatchesQuery();
+  const { data: courses = [] } = useCoursesQuery();
+  const { data: subcourses = [] } = useSubCoursesQuery();
 
   return (
     <div className="space-y-6">
@@ -25,8 +27,18 @@ export default function TeacherBatchesPage() {
             rowKey={(row) => row.batch_id}
             columns={[
               { key: "batch_name", header: "Batch" },
-              { key: "course_id", header: "Course ID" },
-              { key: "subcourse_id", header: "SubCourse ID" },
+              {
+                key: "course_name",
+                header: "Course",
+                render: (row) => courses.find((course) => course.course_id === row.course_id)?.course_name ?? "Mapped course",
+                getFilterValue: (row) => courses.find((course) => course.course_id === row.course_id)?.course_name ?? ""
+              },
+              {
+                key: "subcourse_name",
+                header: "SubCourse",
+                render: (row) => subcourses.find((subcourse) => subcourse.subcourse_id === row.subcourse_id)?.subcourse_name ?? "Mapped subcourse",
+                getFilterValue: (row) => subcourses.find((subcourse) => subcourse.subcourse_id === row.subcourse_id)?.subcourse_name ?? ""
+              },
               { key: "active", header: "Active" },
               {
                 key: "actions",

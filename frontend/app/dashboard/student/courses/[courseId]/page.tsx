@@ -12,12 +12,18 @@ import {
   useSubmitStudentContentMutation
 } from "@/hooks/useLmsQueries";
 
+function formatScore(value: number | null | undefined, maxScore: number) {
+  return maxScore > 0 ? `${value ?? 0}/${maxScore}` : String(value ?? 0);
+}
+
 export default function StudentCourseWorkspacePage() {
   const params = useParams<{ courseId: string }>();
   const [selectedCategory, setSelectedCategory] = useState<string | undefined>(undefined);
   const [drafts, setDrafts] = useState<Record<string, { response_text?: string; response_url?: string }>>({});
   const { data, isLoading } = useStudentBatchWorkspaceQuery(params.courseId, selectedCategory);
   const submitResponse = useSubmitStudentContentMutation();
+  const buildCourseExamHref = (moduleId: string, contentId: string) =>
+    `/course/${data?.course_id}/${data?.subcourse_id}/${moduleId}?batch_id=${data?.batch_id}&content_id=${contentId}&autostart=1`;
 
   const categories = useMemo(() => data?.content_categories ?? [], [data]);
 
@@ -102,12 +108,29 @@ export default function StudentCourseWorkspacePage() {
           <div className="mt-4 space-y-4">
             {module.content.map((item) => (
               <div key={item.content_id} className="rounded-xl border p-4">
+                {(() => {
+                  const isDynamicExam =
+                    item.type === "quiz" &&
+                    (item.quiz?.renderer?.kind === "tecai_reading" || item.quiz?.renderer?.kind === "tecai_writing");
+
+                  return (
+                    <>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{item.title}</p>
                     <p className="text-xs uppercase tracking-[0.2em] text-brand-600">{item.category}</p>
                   </div>
-                  <div className="text-xs text-slate-500">{item.duration} min</div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-xs text-slate-500">{item.duration} min</div>
+                    {/* {isDynamicExam ? (
+                      <AppLink
+                        href={buildCourseExamHref(module.module_id, item.content_id)} target="_blank"
+                        className="rounded-md border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        Open Exam
+                      </AppLink>
+                    ) : null} */}
+                  </div>
                 </div>
 
                 {item.instructions ? <p className="mt-3 text-sm text-slate-600">{item.instructions}</p> : null}
@@ -116,17 +139,7 @@ export default function StudentCourseWorkspacePage() {
                   <ContentRenderer content={item} />
                 </div>
 
-                {item.downloadable && (item.resolved_url || item.url) ? (
-                  <a
-                    href={item.resolved_url ?? item.url ?? "#"}
-                    download
-                    className="mt-3 block text-sm text-slate-600 hover:text-brand-700"
-                  >
-                    Download file
-                  </a>
-                ) : null}
-
-                {item.category === "writing" ? (
+                {item.category === "writing" && !isDynamicExam ? (
                   <div className="mt-4 space-y-3">
                     <textarea
                       className="min-h-32 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
@@ -185,10 +198,14 @@ export default function StudentCourseWorkspacePage() {
                     <p>Submitted on {new Date(item.submission.submitted_at).toLocaleString("en-IN")}</p>
                     <p>
                       Status: {item.submission.review_status} | Latest marks:{" "}
-                      {item.submission.latest_awarded_marks ?? item.submission.latest_auto_score}/{item.submission.max_score}
+                      {formatScore(item.submission.latest_awarded_marks ?? item.submission.latest_auto_score, item.submission.max_score)}
                     </p>
+                    {item.submission.feedback ? <p>Feedback: {item.submission.feedback}</p> : null}
                   </div>
                 ) : null}
+                    </>
+                  );
+                })()}
               </div>
             ))}
           </div>

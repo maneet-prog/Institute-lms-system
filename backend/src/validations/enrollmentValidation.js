@@ -36,6 +36,19 @@ exports.studentSubmissionSchema = Joi.object({
   response_type: Joi.string().required(),
   response_text: Joi.string().allow("", null),
   response_url: Joi.string().uri().allow("", null),
+  exam_responses: Joi.array()
+    .items(
+      Joi.object({
+        part_id: Joi.string().allow("", null),
+        question_id: Joi.string().allow("", null),
+        response_text: Joi.string().allow("", null),
+        response_data: Joi.object().unknown(true).allow(null),
+        word_count: Joi.number().integer().min(0).allow(null),
+        duration_seconds: Joi.number().integer().min(0).allow(null)
+      })
+    )
+    .default([]),
+  time_taken_seconds: Joi.number().integer().min(0).allow(null),
   answers: Joi.array()
     .items(
       Joi.object({

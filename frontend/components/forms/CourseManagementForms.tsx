@@ -192,15 +192,28 @@ export function CourseManagementForms({
         className="space-y-3"
         onSubmit={(event: FormEvent) => {
           event.preventDefault();
-          createModule.mutate(
-            { ...module, institute_id: instituteId },
-            {
-              onSuccess: () => {
-                setModule((prev) => ({ ...prev, module_name: "" }));
-                onSuccess?.();
+          const submitModule = (replaceExisting = false) =>
+            createModule.mutate(
+              { ...module, institute_id: instituteId, replace_existing: replaceExisting },
+              {
+                onSuccess: () => {
+                  setModule((prev) => ({ ...prev, module_name: "" }));
+                  onSuccess?.();
+                },
+                onError: (error) => {
+                  const message = error instanceof Error ? error.message : "Unable to save module.";
+                  if (
+                    !replaceExisting &&
+                    message.toLowerCase().includes("already exists") &&
+                    window.confirm("This module already exists in the selected subcourse. Do you want to replace it?")
+                  ) {
+                    submitModule(true);
+                  }
+                }
               }
-            }
-          );
+            );
+
+          submitModule(false);
         }}
       >
         <h3 className="text-lg font-semibold">Add Module</h3>

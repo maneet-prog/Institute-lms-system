@@ -24,7 +24,11 @@ export default function TecaiPreviewExamPage() {
     );
   }
 
-  if (!previewContent?.quiz?.renderer || previewContent.quiz.renderer.kind !== "tecai_reading") {
+  if (
+    !previewContent?.quiz?.renderer ||
+    (previewContent.quiz.renderer.kind !== "tecai_reading" &&
+      previewContent.quiz.renderer.kind !== "tecai_writing")
+  ) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100 text-sm text-slate-600">
         Preview data is not available.

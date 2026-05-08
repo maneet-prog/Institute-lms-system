@@ -17,22 +17,22 @@ export default function InstituteAdminUsersPage() {
   return (
     <div className="space-y-6">
       <Card>
-        <h1 className="mb-1 text-2xl font-semibold">Institute Admin: Users</h1>
-        <p className="text-sm text-slate-600">Approve and manage students and teachers.</p>
+        <h1 className="mb-1 text-2xl font-semibold">Institute Admin: Students</h1>
+        <p className="text-sm text-slate-600">Approve and manage student accounts only.</p>
       </Card>
       <Card>
         <div className="flex flex-wrap gap-3">
           <Button variant={showCreate ? "secondary" : "primary"} onClick={() => setShowCreate((prev) => !prev)}>
-            {showCreate ? "Close Add User" : "Add User"}
+            {showCreate ? "Close Add User" : "Add Student"}
           </Button>
         </div>
         {showCreate ? (
           <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <UserCreateForm defaultRoles={["student"]} title="Add User" onSuccess={() => setShowCreate(false)} />
+            <UserCreateForm defaultRoles={["student"]} title="Add Student" onSuccess={() => setShowCreate(false)} />
           </div>
         ) : null}
       </Card>
-      <Card>{isLoading ? <p>Loading users...</p> : <UsersTable users={users} title="Edit User" />}</Card>
+      <Card>{isLoading ? <p>Loading users...</p> : <UsersTable users={users} roleFilter="student" title="Edit Student" />}</Card>
     </div>
   );
 }

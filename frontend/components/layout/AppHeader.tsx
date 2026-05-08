@@ -22,8 +22,6 @@ export function AppHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const role = useAuthStore((state) => state.role);
-  const userEmail = useAuthStore((state) => state.userEmail);
-  const instituteId = useAuthStore((state) => state.instituteId);
   const logout = useAuthStore((state) => state.logout);
 
   const startNavigation = useUiStore((state) => state.startNavigation);
@@ -40,7 +38,7 @@ export function AppHeader() {
             <div className="flex items-center">
               <AppLink
                 href={role ? ROLE_HOME[role] : "/"}
-                className="flex items-center"
+                className="flex items-center gap-3"
               >
                 <Image
                   src={logoPng}
@@ -50,6 +48,10 @@ export function AppHeader() {
                   className="h-12 w-auto object-contain"
                   priority
                 />
+                <div className="hidden sm:block">
+                  <p className="text-base font-semibold text-slate-900">TecOnline Campus</p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-brand-600">Tajinder&apos;s English Classes</p>
+                </div>
               </AppLink>
             </div>
 

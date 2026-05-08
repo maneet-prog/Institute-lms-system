@@ -1,6 +1,7 @@
 const Course = require("../models/Course");
 const Subcourse = require("../models/Subcourse");
 const Module = require("../models/Module");
+const Content = require("../models/Content");
 const SystemSetting = require("../models/SystemSetting");
 const AppError = require("../utils/AppError");
 const { uploadFile, deleteFile } = require("./storageService");
@@ -19,6 +20,26 @@ const {
 
 const findCourse = (courseId, instituteId) => Course.findOne({ _id: courseId, instituteId });
 const findSubcourse = (subcourseId, instituteId) => Subcourse.findOne({ _id: subcourseId, instituteId });
+const findModule = (moduleId, instituteId) => Module.findOne({ _id: moduleId, instituteId });
+
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const inferModuleExamType = (moduleName = "") => {
+  const normalized = String(moduleName).trim().toLowerCase();
+  if (normalized.includes("reading")) return "reading";
+  if (normalized.includes("writing")) return "writing";
+  if (normalized.includes("listening") || normalized.includes("listing")) return "listening";
+  if (normalized.includes("speaking") || normalized.includes("spoken")) return "speaking";
+  return "general";
+};
+
+const findDuplicateModuleByName = ({ instituteId, subcourseId, moduleName, excludeId }) =>
+  Module.findOne({
+    instituteId,
+    subcourseId,
+    ...(excludeId ? { _id: { $ne: excludeId } } : {}),
+    moduleName: { $regex: `^${escapeRegex(String(moduleName).trim())}$`, $options: "i" }
+  });
 
 const buildCatalogUploadSegments = (entityType, instituteId, entityId) => [
   "institutes",
@@ -316,14 +337,98 @@ const createModule = async (payload, tenant, currentUser) => {
     }
   }
 
+  const duplicateModule = await findDuplicateModuleByName({
+    instituteId,
+    subcourseId: payload.subcourse_id,
+    moduleName: payload.module_name
+  });
+  const inferredExamType = inferModuleExamType(payload.module_name);
+
+  if (duplicateModule) {
+    if (!payload.replace_existing) {
+      throw new AppError("A module with this name already exists in the selected subcourse. Replace it or cancel.", 409);
+    }
+
+    duplicateModule.courseId = payload.course_id;
+    duplicateModule.subcourseId = payload.subcourse_id;
+    duplicateModule.moduleName = payload.module_name.trim();
+    duplicateModule.examType = inferredExamType;
+    duplicateModule.active = payload.active;
+    await duplicateModule.save();
+    return serializeModule(duplicateModule);
+  }
+
   const moduleItem = await Module.create({
     instituteId,
     courseId: payload.course_id,
     subcourseId: payload.subcourse_id,
-    moduleName: payload.module_name,
+    moduleName: payload.module_name.trim(),
+    examType: inferredExamType,
     active: payload.active
   });
   return serializeModule(moduleItem);
+};
+
+const updateModule = async (id, payload, tenant, currentUser) => {
+  const instituteId = await resolveInstituteScope({
+    requestedInstituteId: payload.institute_id,
+    tenant,
+    currentUser
+  });
+  const moduleItem = await findModule(id, instituteId);
+  if (!moduleItem) throw new AppError("Module not found.", 404);
+
+  const subcourse = await findSubcourse(payload.subcourse_id, instituteId);
+  if (!subcourse || !sameId(subcourse.courseId, payload.course_id)) {
+    throw new AppError("Subcourse not found.", 404);
+  }
+
+  const duplicateModule = await findDuplicateModuleByName({
+    instituteId,
+    subcourseId: payload.subcourse_id,
+    moduleName: payload.module_name,
+    excludeId: moduleItem._id
+  });
+  if (duplicateModule) {
+    throw new AppError("Another module with this name already exists in the selected subcourse.", 409);
+  }
+
+  if (hasRole(currentUser, "teacher") && !hasRole(currentUser, "super_admin", "institute_admin")) {
+    const teacherScope = await getTeacherScope(currentUser._id, instituteId);
+    const currentPair = `${String(moduleItem.courseId)}::${String(moduleItem.subcourseId)}`;
+    const nextPair = `${payload.course_id}::${payload.subcourse_id}`;
+    if (!teacherScope.coursePairs.has(currentPair) || !teacherScope.coursePairs.has(nextPair)) {
+      throw new AppError("Teachers can only manage modules in their assigned batch course paths.", 403);
+    }
+  }
+
+  moduleItem.courseId = payload.course_id;
+  moduleItem.subcourseId = payload.subcourse_id;
+  moduleItem.moduleName = payload.module_name.trim();
+  moduleItem.examType = inferModuleExamType(payload.module_name);
+  moduleItem.active = payload.active;
+  await moduleItem.save();
+  return serializeModule(moduleItem);
+};
+
+const deleteModule = async (id, tenant, currentUser) => {
+  const instituteId = await resolveInstituteScope({ tenant, currentUser });
+  const moduleItem = await findModule(id, instituteId);
+  if (!moduleItem) throw new AppError("Module not found.", 404);
+
+  if (hasRole(currentUser, "teacher") && !hasRole(currentUser, "super_admin", "institute_admin")) {
+    const teacherScope = await getTeacherScope(currentUser._id, instituteId);
+    if (!teacherScope.coursePairs.has(`${String(moduleItem.courseId)}::${String(moduleItem.subcourseId)}`)) {
+      throw new AppError("Teachers can only manage modules in their assigned batch course paths.", 403);
+    }
+  }
+
+  moduleItem.active = false;
+  await moduleItem.save();
+  await Content.updateMany(
+    { instituteId, moduleId: moduleItem._id, active: true },
+    { $set: { active: false } }
+  );
 };
 
 const listModules = async ({ tenant, currentUser, instituteId, courseId, subcourseId }) => {
@@ -370,5 +475,7 @@ module.exports = {
   updateSubcourse,
   deleteSubcourse,
   createModule,
+  updateModule,
+  deleteModule,
   listModules
 };

@@ -17,14 +17,14 @@ export default function AdminUsersPage() {
     <div className="space-y-6">
       <Card className="border-brand-100 bg-gradient-to-br from-brand-50 via-white to-white">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-500">Admin Management</p>
-        <h1 className="mb-1 mt-2 text-2xl font-semibold">Users Info</h1>
-        <p className="text-sm text-slate-600">Approve users, assign institutes, and manage role access from one screen.</p>
+        <h1 className="mb-1 mt-2 text-2xl font-semibold">Students Info</h1>
+        <p className="text-sm text-slate-600">Review student records, approvals, and institute assignments from one screen.</p>
       </Card>
       <Card>
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Users List</h2>
+          <h2 className="text-lg font-semibold">Students List</h2>
           <Button variant={showCreate ? "secondary" : "primary"} onClick={() => setShowCreate((prev) => !prev)}>
-            {showCreate ? "Close Add Form" : "Add User"}
+            {showCreate ? "Close Add Form" : "Add Student"}
           </Button>
         </div>
         {showCreate ? (
@@ -32,7 +32,7 @@ export default function AdminUsersPage() {
             <UserCreateForm
               institutes={institutes}
               defaultRoles={["student"]}
-              title="Add User"
+              title="Add Student"
               onSuccess={() => setShowCreate(false)}
             />
           </div>
@@ -40,7 +40,7 @@ export default function AdminUsersPage() {
         {isLoading ? (
           <p>Loading users...</p>
         ) : (
-          <UsersTable users={users} title="Edit User" />
+          <UsersTable users={users} roleFilter="student" title="Edit Student" />
         )}
       </Card>
     </div>

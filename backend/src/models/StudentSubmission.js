@@ -16,6 +16,18 @@ const quizAnswerSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const examResponseSchema = new mongoose.Schema(
+  {
+    partId: { type: String, default: null },
+    questionId: { type: String, default: null },
+    responseText: { type: String, default: null },
+    responseData: { type: mongoose.Schema.Types.Mixed, default: null },
+    wordCount: { type: Number, default: 0 },
+    durationSeconds: { type: Number, default: 0 }
+  },
+  { _id: false }
+);
+
 const submissionAttemptSchema = new mongoose.Schema(
   {
     attemptNumber: { type: Number, required: true },
@@ -23,6 +35,9 @@ const submissionAttemptSchema = new mongoose.Schema(
     responseText: { type: String, default: null },
     responseUrl: { type: String, default: null },
     answers: { type: [quizAnswerSchema], default: [] },
+    examResponses: { type: [examResponseSchema], default: [] },
+    rendererKind: { type: String, default: null },
+    timeTakenSeconds: { type: Number, default: 0 },
     autoScore: { type: Number, default: 0 },
     awardedMarks: { type: Number, default: null },
     maxScore: { type: Number, default: 0 },

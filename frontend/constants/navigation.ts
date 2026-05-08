@@ -27,6 +27,11 @@ export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
           description: "Manage delivery groups and batch content"
         },
         {
+          label: "Reusable Content",
+          href: "/dashboard/admin/content",
+          description: "Create once and assign subcourse content across batches"
+        },
+        {
           label: "Students",
           href: "/dashboard/admin/users",
           description: "Manage student approvals and access"
@@ -35,6 +40,11 @@ export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
           label: "Teachers",
           href: "/dashboard/admin/teachers",
           description: "Manage teacher accounts"
+        },
+        {
+          label: "All Users",
+          href: "/dashboard/admin/all-users",
+          description: "See every user account in one place"
         },
         {
           label: "Submissions",
@@ -63,6 +73,11 @@ export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
           description: "Manage student approvals and enrollment"
         },
         {
+          label: "All Users",
+          href: "/dashboard/institute-admin/all-users",
+          description: "See every user in your institute"
+        },
+        {
           label: "Teachers",
           href: "/dashboard/institute-admin/teachers",
           description: "Manage teacher accounts"
@@ -71,6 +86,11 @@ export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
           label: "Batches & Materials",
           href: "/dashboard/institute-admin/batches",
           description: "Organize delivery groups and course materials"
+        },
+        {
+          label: "Reusable Content",
+          href: "/dashboard/institute-admin/content",
+          description: "Create reusable subcourse content for your batches"
         },
         {
           label: "Submissions",
@@ -104,7 +124,8 @@ export const NAV_BY_ROLE: Record<Role, NavGroup[]> = {
       items: [
         { label: "Overview", href: "/dashboard/student", description: "Fresh dashboard summary" },
         { label: "My Courses", href: "/dashboard/student/courses", description: "Enrolled programs" },
-        { label: "My Modules", href: "/dashboard/student/modules", description: "Study material and progress" }
+        { label: "My Modules", href: "/dashboard/student/modules", description: "Study material and progress" },
+        { label: "Your Submissions", href: "/dashboard/student/submissions", description: "Your submission details" }
       ]
     },
     {

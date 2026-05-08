@@ -2,7 +2,9 @@ const AppError = require("./AppError");
 
 const ensureArray = (value) => (Array.isArray(value) ? value : []);
 const isTecaiRenderer = (renderer) =>
-  renderer?.kind === "tecai_reading" && Array.isArray(renderer.paragraphs);
+  (renderer?.kind === "tecai_reading" && Array.isArray(renderer.paragraphs)) ||
+  (renderer?.kind === "tecai_writing" &&
+    (Array.isArray(renderer.parts) || Array.isArray(renderer.blocks)));
 
 const normalizeQuestion = (question, index) => {
   const questionId = String(

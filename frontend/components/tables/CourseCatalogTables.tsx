@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FolderOpen, Pencil, Trash2 } from "lucide-react";
 
 import { Course, SubCourse } from "@/types/lms";
 import {
@@ -10,6 +11,7 @@ import {
   useUpdateSubCourseMutation
 } from "@/hooks/useLmsQueries";
 import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
@@ -69,18 +71,20 @@ export function CourseCatalogTables({
         rowKey={(row) => row.course_id}
         columns={[
           { key: "course_name", header: "Course Name" },
-          { key: "course_id", header: "Course ID" },
           { key: "active", header: "Active", render: (row) => (row.active ? "Yes" : "No") },
           {
             key: "actions",
             header: "Actions",
             render: (row) => (
               <div className="flex gap-2">
-                <Button variant="secondary" onClick={() => onSelectCourse?.(row.course_id)}>
-                  {selectedCourseId === row.course_id ? "Selected" : "Open"}
-                </Button>
-                <Button
-                  variant="secondary"
+                <IconButton
+                  icon={<FolderOpen className="h-4 w-4" />}
+                  label={selectedCourseId === row.course_id ? `Selected ${row.course_name}` : `Open ${row.course_name}`}
+                  onClick={() => onSelectCourse?.(row.course_id)}
+                />
+                <IconButton
+                  icon={<Pencil className="h-4 w-4" />}
+                  label={`Edit ${row.course_name}`}
                   onClick={() => {
                     setSelectedCourse(row);
                     setCourseForm({
@@ -91,19 +95,17 @@ export function CourseCatalogTables({
                       active: row.active
                     });
                   }}
-                >
-                  Edit
-                </Button>
-                <Button
+                />
+                <IconButton
                   variant="danger"
+                  icon={<Trash2 className="h-4 w-4" />}
+                  label={`Delete ${row.course_name}`}
                   onClick={() => {
                     if (window.confirm(`Delete course "${row.course_name}"?`)) {
                       deleteCourse.mutate(row.course_id);
                     }
                   }}
-                >
-                  Delete
-                </Button>
+                />
               </div>
             )
           }
@@ -115,16 +117,21 @@ export function CourseCatalogTables({
         rowKey={(row) => row.subcourse_id}
         columns={[
           { key: "subcourse_name", header: "SubCourse Name" },
-          { key: "course_id", header: "Course ID" },
-          { key: "subcourse_id", header: "SubCourse ID" },
+          {
+            key: "course_name",
+            header: "Course",
+            render: (row) => courses.find((course) => course.course_id === row.course_id)?.course_name ?? "Mapped course",
+            getFilterValue: (row) => courses.find((course) => course.course_id === row.course_id)?.course_name ?? ""
+          },
           { key: "active", header: "Active", render: (row) => (row.active ? "Yes" : "No") },
           {
             key: "actions",
             header: "Actions",
             render: (row) => (
               <div className="flex gap-2">
-                <Button
-                  variant="secondary"
+                <IconButton
+                  icon={<Pencil className="h-4 w-4" />}
+                  label={`Edit ${row.subcourse_name}`}
                   onClick={() => {
                     setSelectedSubcourse(row);
                     setSubcourseForm({
@@ -136,19 +143,17 @@ export function CourseCatalogTables({
                       active: row.active
                     });
                   }}
-                >
-                  Edit
-                </Button>
-                <Button
+                />
+                <IconButton
                   variant="danger"
+                  icon={<Trash2 className="h-4 w-4" />}
+                  label={`Delete ${row.subcourse_name}`}
                   onClick={() => {
                     if (window.confirm(`Delete subcourse "${row.subcourse_name}"?`)) {
                       deleteSubcourse.mutate(row.subcourse_id);
                     }
                   }}
-                >
-                  Delete
-                </Button>
+                />
               </div>
             )
           }

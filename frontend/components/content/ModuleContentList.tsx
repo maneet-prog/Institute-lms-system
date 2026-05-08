@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 
 import { Content } from "@/types/lms";
 import {
+  useBatchDetailQuery,
   useDeleteContentMutation,
   useModuleContentsQuery,
   useQuizPreviewMutation,
@@ -11,8 +13,10 @@ import {
 } from "@/hooks/useLmsQueries";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { IconButton } from "@/components/ui/IconButton";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { MultiSelect } from "@/components/ui/MultiSelect";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { saveTecaiPreviewContent } from "@/utils/tecaiPreview";
@@ -25,10 +29,11 @@ type EditFormState = {
   order_index: number;
   category: string;
   instructions: string;
-  downloadable: boolean;
   response_type: string;
   duration: number;
   attempt_limit: number;
+  visibility_scope: "batch" | "selected_students";
+  assigned_student_ids: string[];
   replace_file: boolean;
   file: File | null;
 };
@@ -41,10 +46,11 @@ const buildInitialForm = (content: Content): EditFormState => ({
   order_index: content.order_index,
   category: content.category ?? "reading",
   instructions: content.instructions ?? "",
-  downloadable: Boolean(content.downloadable),
   response_type: content.response_type ?? "",
   duration: content.duration,
   attempt_limit: content.quiz?.attempt_limit ?? 0,
+  visibility_scope: content.visibility_scope ?? "batch",
+  assigned_student_ids: content.assigned_student_ids ?? [],
   replace_file: false,
   file: null
 });
@@ -59,11 +65,16 @@ export function ModuleContentList({
   canManage?: boolean;
 }) {
   const { data = [], isLoading } = useModuleContentsQuery(moduleId, batchId);
+  const { data: batchDetail } = useBatchDetailQuery(batchId);
   const deleteContent = useDeleteContentMutation();
   const updateContent = useUpdateContentMutation();
   const previewQuiz = useQuizPreviewMutation();
   const [selectedContent, setSelectedContent] = useState<Content | null>(null);
   const [form, setForm] = useState<EditFormState | null>(null);
+  const studentOptions = (batchDetail?.students || []).map((student) => ({
+    label: `${student.first_name} ${student.last_name}`,
+    value: student.user_id
+  }));
 
   const generatedPreviewContent =
     selectedContent && form?.type === "quiz" && previewQuiz.data
@@ -93,7 +104,7 @@ export function ModuleContentList({
               <div>
                 <p className="text-sm font-semibold text-slate-900">{content.title}</p>
                 <p className="mt-1 text-xs uppercase tracking-[0.2em] text-brand-600">
-                  {content.type} | Order {content.order_index}
+                  {content.type}
                 </p>
                 {content.description ? (
                   <p className="mt-3 text-sm text-slate-600 line-clamp-3">{content.description.replace(/<[^>]+>/g, "")}</p>
@@ -101,26 +112,28 @@ export function ModuleContentList({
               </div>
               {canManage ? (
                 <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
+                  <IconButton
+                    icon={<Pencil className="h-4 w-4" />}
+                    label={`Edit ${content.title}`}
                     onClick={() => {
                       previewQuiz.reset();
                       setSelectedContent(content);
                       setForm(buildInitialForm(content));
                     }}
-                  >
-                    Edit
-                  </Button>
-                  {content.type === "quiz" && content.quiz?.renderer?.kind === "tecai_reading" ? (
-                    <Button
-                      variant="secondary"
+                  />
+                  {content.type === "quiz" &&
+                  (content.quiz?.renderer?.kind === "tecai_reading" ||
+                    content.quiz?.renderer?.kind === "tecai_writing") ? (
+                    <IconButton
+                      icon={<Eye className="h-4 w-4" />}
+                      label={`Preview ${content.title}`}
                       onClick={() => window.open(`/exam/${content.content_id}`, "_blank", "noopener,noreferrer")}
-                    >
-                      Preview
-                    </Button>
+                    />
                   ) : null}
-                  <Button
-                    variant="secondary"
+                  <IconButton
+                    variant="danger"
+                    icon={<Trash2 className="h-4 w-4" />}
+                    label={`Delete ${content.title}`}
                     onClick={() =>
                       deleteContent.mutate({
                         contentId: content.content_id,
@@ -129,9 +142,7 @@ export function ModuleContentList({
                       })
                     }
                     disabled={deleteContent.isPending}
-                  >
-                    Delete
-                  </Button>
+                  />
                 </div>
               ) : null}
             </div>
@@ -149,58 +160,100 @@ export function ModuleContentList({
         }}
       >
         {selectedContent && form ? (
-          <div className="space-y-3">
-            <Input label="Title" value={form.title} onChange={(e) => setForm((prev) => (prev ? { ...prev, title: e.target.value } : prev))} />
-            <Select
-              label="Type"
-              options={[
-                { label: "Text / Notes", value: "text" },
-                { label: "Video", value: "video" },
-                { label: "Audio", value: "audio" },
-                { label: "PDF", value: "pdf" },
-                { label: "Document", value: "document" },
-                { label: "Quiz", value: "quiz" }
-              ]}
-              value={form.type}
-              onChange={(e) => {
-                previewQuiz.reset();
-                setForm((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        type: e.target.value
-                      }
-                    : prev
-                );
-              }}
-            />
-            <Textarea
-              label="Description"
-              value={form.description}
-              onChange={(e) => setForm((prev) => (prev ? { ...prev, description: e.target.value } : prev))}
-            />
-            <Input
-              label="External URL"
-              type="url"
-              value={form.external_url}
-              onChange={(e) => setForm((prev) => (prev ? { ...prev, external_url: e.target.value } : prev))}
-            />
-            <Select
-              label="Category"
-              options={[
-                { label: "Reading", value: "reading" },
-                { label: "Writing", value: "writing" },
-                { label: "Listening", value: "listening" },
-                { label: "Speaking", value: "speaking" }
-              ]}
-              value={form.category}
-              onChange={(e) => setForm((prev) => (prev ? { ...prev, category: e.target.value } : prev))}
-            />
-            <Textarea
-              label="Instructions"
-              value={form.instructions}
-              onChange={(e) => setForm((prev) => (prev ? { ...prev, instructions: e.target.value } : prev))}
-            />
+          <div className="space-y-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <Pencil className="h-4 w-4 text-brand-600" />
+                Update Content Details
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Input label="Title" value={form.title} onChange={(e) => setForm((prev) => (prev ? { ...prev, title: e.target.value } : prev))} />
+                <Select
+                  label="Type"
+                  options={[
+                    { label: "Text / Notes", value: "text" },
+                    { label: "Video", value: "video" },
+                    { label: "Audio", value: "audio" },
+                    { label: "PDF", value: "pdf" },
+                    { label: "Document", value: "document" },
+                    { label: "Quiz", value: "quiz" }
+                  ]}
+                  value={form.type}
+                  onChange={(e) => {
+                    previewQuiz.reset();
+                    setForm((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            type: e.target.value
+                          }
+                        : prev
+                    );
+                  }}
+                />
+                <Select
+                  label="Visibility"
+                  options={[
+                    { label: "Entire batch", value: "batch" },
+                    { label: "Specific students", value: "selected_students" }
+                  ]}
+                  value={form.visibility_scope}
+                  onChange={(e) =>
+                    setForm((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            visibility_scope: e.target.value as "batch" | "selected_students",
+                            assigned_student_ids:
+                              e.target.value === "selected_students" ? prev.assigned_student_ids : []
+                          }
+                        : prev
+                    )
+                  }
+                />
+                <Input
+                  label="External URL"
+                  type="url"
+                  value={form.external_url}
+                  onChange={(e) => setForm((prev) => (prev ? { ...prev, external_url: e.target.value } : prev))}
+                />
+                <Input
+                  label="Duration (minutes)"
+                  type="number"
+                  value={String(form.duration)}
+                  onChange={(e) => setForm((prev) => (prev ? { ...prev, duration: Number(e.target.value) } : prev))}
+                />
+                <Input
+                  label="Attempt Limit (0 = Unlimited)"
+                  type="number"
+                  min="0"
+                  value={String(form.attempt_limit)}
+                  onChange={(e) => setForm((prev) => (prev ? { ...prev, attempt_limit: Math.max(0, Number(e.target.value) || 0) } : prev))}
+                />
+              </div>
+              <div className="mt-3 space-y-3">
+                <Textarea
+                  label="Description"
+                  value={form.description}
+                  onChange={(e) => setForm((prev) => (prev ? { ...prev, description: e.target.value } : prev))}
+                />
+                <Textarea
+                  label="Instructions"
+                  value={form.instructions}
+                  onChange={(e) => setForm((prev) => (prev ? { ...prev, instructions: e.target.value } : prev))}
+                />
+              </div>
+              {form.visibility_scope === "selected_students" ? (
+                <div className="mt-3">
+                  <MultiSelect
+                    label="Visible To"
+                    options={studentOptions}
+                    value={form.assigned_student_ids}
+                    onChange={(value) => setForm((prev) => (prev ? { ...prev, assigned_student_ids: value } : prev))}
+                  />
+                </div>
+              ) : null}
+            </div>
             {form.type === "quiz" ? (
               <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -215,7 +268,10 @@ export function ModuleContentList({
                     variant="secondary"
                     onClick={() => {
                       if (form.file) {
-                        previewQuiz.mutate(form.file);
+                        previewQuiz.mutate({
+                          file: form.file,
+                          category: form.category
+                        });
                       }
                     }}
                     disabled={!form.file || previewQuiz.isPending}
@@ -243,10 +299,12 @@ export function ModuleContentList({
                   </p>
                 ) : null}
 
-                {generatedPreviewContent || selectedContent.quiz?.renderer?.kind === "tecai_reading" ? (
+                {generatedPreviewContent ||
+                selectedContent.quiz?.renderer?.kind === "tecai_reading" ||
+                selectedContent.quiz?.renderer?.kind === "tecai_writing" ? (
                   <div className="rounded-xl border border-slate-200 bg-white p-4">
                     <p className="text-sm text-slate-600">
-                      Open the exact `testing.html` preview in a new tab to verify layout, numbering, inputs, and drag-drop behavior.
+                      Open the exact preview in a new tab to verify layout, content rendering, inputs, and timer behavior.
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {generatedPreviewContent ? (
@@ -262,7 +320,8 @@ export function ModuleContentList({
                           Open Exact Preview
                         </Button>
                       ) : null}
-                      {selectedContent.quiz?.renderer?.kind === "tecai_reading" ? (
+                      {selectedContent.quiz?.renderer?.kind === "tecai_reading" ||
+                      selectedContent.quiz?.renderer?.kind === "tecai_writing" ? (
                         <Button
                           type="button"
                           variant="secondary"
@@ -276,27 +335,6 @@ export function ModuleContentList({
                 ) : null}
               </div>
             ) : null}
-            <Input
-              label="Display Order"
-              type="number"
-              value={String(form.order_index)}
-              onChange={(e) =>
-                setForm((prev) => (prev ? { ...prev, order_index: Number(e.target.value) } : prev))
-              }
-            />
-            <Input
-              label="Duration (minutes)"
-              type="number"
-              value={String(form.duration)}
-              onChange={(e) => setForm((prev) => (prev ? { ...prev, duration: Number(e.target.value) } : prev))}
-            />
-            <Input
-              label="Attempt Limit (0 = Unlimited)"
-              type="number"
-              min="0"
-              value={String(form.attempt_limit)}
-              onChange={(e) => setForm((prev) => (prev ? { ...prev, attempt_limit: Math.max(0, Number(e.target.value) || 0) } : prev))}
-            />
             {(form.category === "writing" || form.category === "speaking") ? (
               <Select
                 label="Response Type"
@@ -309,27 +347,21 @@ export function ModuleContentList({
                 onChange={(e) => setForm((prev) => (prev ? { ...prev, response_type: e.target.value } : prev))}
               />
             ) : null}
-            <label className="flex items-center gap-2 text-sm text-slate-700">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={form.replace_file}
+                  onChange={(e) => setForm((prev) => (prev ? { ...prev, replace_file: e.target.checked } : prev))}
+                />
+                Replace current uploaded file
+              </label>
               <input
-                type="checkbox"
-                checked={form.downloadable}
-                onChange={(e) => setForm((prev) => (prev ? { ...prev, downloadable: e.target.checked } : prev))}
+                className="mt-3 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                type="file"
+                onChange={(e) => setForm((prev) => (prev ? { ...prev, file: e.target.files?.[0] ?? null } : prev))}
               />
-              Allow download
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={form.replace_file}
-                onChange={(e) => setForm((prev) => (prev ? { ...prev, replace_file: e.target.checked } : prev))}
-              />
-              Replace current uploaded file
-            </label>
-            <input
-              className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-              type="file"
-              onChange={(e) => setForm((prev) => (prev ? { ...prev, file: e.target.files?.[0] ?? null } : prev))}
-            />
+            </div>
             <div className="flex gap-2">
               <Button
                 onClick={() =>
@@ -345,10 +377,12 @@ export function ModuleContentList({
                         order_index: form.order_index,
                         category: form.category,
                         instructions: form.instructions,
-                        downloadable: form.downloadable,
                         response_type: form.response_type,
                         duration: form.duration,
                         attempt_limit: form.attempt_limit,
+                        visibility_scope: form.visibility_scope,
+                        assigned_student_ids:
+                          form.visibility_scope === "selected_students" ? form.assigned_student_ids : [],
                         replace_file: form.replace_file,
                         file: form.file
                       }

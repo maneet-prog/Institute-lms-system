@@ -18,12 +18,17 @@ import { updateBatch } from "@/services/batches";
 import { assignResource, removeResource } from "@/services/resources";
 import {
   addContent,
+  addReusableContent,
+  assignReusableContentToBatch,
   createCourse,
   createModule,
   createSubCourse,
   deleteContent,
+  deleteReusableContent,
   deleteCourse,
+  deleteModule,
   deleteSubCourse,
+  getCourseModuleExam,
   getCourses,
   getCoursesByInstitute,
   getModuleContents,
@@ -32,6 +37,7 @@ import {
   previewGeneratedQuiz,
   getPublicCourses,
   getPublicSubCourses,
+  getReusableModuleContents,
   getSubCourses,
   getSubCoursesByInstitute,
   getStudentBatchWorkspace,
@@ -41,7 +47,9 @@ import {
   getStudentModules,
   submitStudentContentResponse,
   updateContent,
+  updateReusableContent,
   updateCourse,
+  updateModule,
   updateSubCourse
 } from "@/services/courses";
 import {
@@ -128,11 +136,39 @@ export function useModuleContentsQuery(moduleId?: string, batchId?: string) {
   });
 }
 
+export function useReusableModuleContentsQuery(moduleId?: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ["reusable-module-contents", moduleId ?? "none"],
+    queryFn: () => getReusableModuleContents(moduleId as string),
+    enabled: (options?.enabled ?? true) && Boolean(moduleId)
+  });
+}
+
 export function useTecaiExamQuery(contentId?: string) {
   return useQuery({
     queryKey: ["tecai-exam", contentId ?? "none"],
     queryFn: () => getTecaiExam(contentId as string),
     enabled: Boolean(contentId)
+  });
+}
+
+export function useCourseModuleExamQuery(
+  courseId?: string,
+  examTypeId?: string,
+  moduleId?: string,
+  params?: { batch_id?: string; content_id?: string }
+) {
+  return useQuery({
+    queryKey: [
+      "course-module-exam",
+      courseId ?? "none",
+      examTypeId ?? "none",
+      moduleId ?? "none",
+      params?.batch_id ?? "all",
+      params?.content_id ?? "latest"
+    ],
+    queryFn: () => getCourseModuleExam(courseId as string, examTypeId as string, moduleId as string, params),
+    enabled: Boolean(courseId && examTypeId && moduleId)
   });
 }
 
@@ -383,6 +419,36 @@ export function useCreateModuleMutation() {
   });
 }
 
+export function useUpdateModuleMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ moduleId, payload }: { moduleId: string; payload: Parameters<typeof updateModule>[1] }) =>
+      updateModule(moduleId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["modules"] });
+      queryClient.invalidateQueries({ queryKey: ["student-batch-workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["student-modules"] });
+      pushToast("Module updated successfully.", "success");
+    }
+  });
+}
+
+export function useDeleteModuleMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteModule,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["modules"] });
+      queryClient.invalidateQueries({ queryKey: ["module-contents"] });
+      queryClient.invalidateQueries({ queryKey: ["student-batch-workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["student-modules"] });
+      pushToast("Module deleted successfully.", "success");
+    }
+  });
+}
+
 export function useAddContentMutation() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -390,6 +456,7 @@ export function useAddContentMutation() {
     onSuccess: (content) => {
       queryClient.invalidateQueries({ queryKey: ["module-contents", content.batch_id, content.module_id] });
       queryClient.invalidateQueries({ queryKey: ["student-batch-workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
       pushToast("Content added successfully.", "success");
     }
   });
@@ -401,6 +468,17 @@ export function useQuizPreviewMutation() {
   });
 }
 
+export function useAddReusableContentMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: addReusableContent,
+    onSuccess: (content) => {
+      queryClient.invalidateQueries({ queryKey: ["reusable-module-contents", content.module_id] });
+      pushToast("Reusable content saved successfully.", "success");
+    }
+  });
+}
+
 export function useUpdateContentMutation() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -409,7 +487,20 @@ export function useUpdateContentMutation() {
     onSuccess: (content) => {
       queryClient.invalidateQueries({ queryKey: ["module-contents", content.batch_id, content.module_id] });
       queryClient.invalidateQueries({ queryKey: ["student-batch-workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
       pushToast("Content updated successfully.", "success");
+    }
+  });
+}
+
+export function useUpdateReusableContentMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ contentId, payload }: { contentId: string; payload: Parameters<typeof updateReusableContent>[1] }) =>
+      updateReusableContent(contentId, payload),
+    onSuccess: (content) => {
+      queryClient.invalidateQueries({ queryKey: ["reusable-module-contents", content.module_id] });
+      pushToast("Reusable content updated successfully.", "success");
     }
   });
 }
@@ -422,7 +513,39 @@ export function useDeleteContentMutation() {
     onSuccess: ({ moduleId, batchId }) => {
       queryClient.invalidateQueries({ queryKey: ["module-contents", batchId, moduleId] });
       queryClient.invalidateQueries({ queryKey: ["student-batch-workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
       pushToast("Content deleted successfully.", "success");
+    }
+  });
+}
+
+export function useAssignReusableContentMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      contentId,
+      payload
+    }: {
+      contentId: string;
+      payload: Parameters<typeof assignReusableContentToBatch>[1];
+    }) => assignReusableContentToBatch(contentId, payload),
+    onSuccess: (content) => {
+      queryClient.invalidateQueries({ queryKey: ["module-contents", content.batch_id, content.module_id] });
+      queryClient.invalidateQueries({ queryKey: ["student-batch-workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+      pushToast("Reusable content assigned successfully.", "success");
+    }
+  });
+}
+
+export function useDeleteReusableContentMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ contentId, moduleId }: { contentId: string; moduleId: string }) =>
+      deleteReusableContent(contentId).then((result) => ({ ...result, moduleId })),
+    onSuccess: ({ moduleId }) => {
+      queryClient.invalidateQueries({ queryKey: ["reusable-module-contents", moduleId] });
+      pushToast("Reusable content deleted successfully.", "success");
     }
   });
 }
@@ -433,6 +556,9 @@ export function useSubmitStudentContentMutation() {
     mutationFn: submitStudentContentResponse,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["student-batch-workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["tecai-exam"] });
+      queryClient.invalidateQueries({ queryKey: ["course-module-exam"] });
       pushToast("Response submitted successfully.", "success");
     }
   });
@@ -580,7 +706,10 @@ export function useReviewSubmissionMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reviewable-submissions"] });
       queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["student-modules"] });
       queryClient.invalidateQueries({ queryKey: ["student-batch-workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["tecai-exam"] });
+      queryClient.invalidateQueries({ queryKey: ["course-module-exam"] });
       pushToast("Submission reviewed successfully.", "success");
     }
   });

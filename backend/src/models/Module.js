@@ -21,6 +21,11 @@ const moduleSchema = new mongoose.Schema(
       index: true
     },
     moduleName: { type: String, required: true, trim: true },
+    examType: {
+      type: String,
+      enum: ["reading", "writing", "listening", "speaking", "general"],
+      default: "general"
+    },
     active: { type: Boolean, default: true }
   },
   { timestamps: true }

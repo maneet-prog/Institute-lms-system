@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { ModuleCatalogTable } from "@/components/content/ModuleCatalogTable";
 import { CourseManagementForms } from "@/components/forms/CourseManagementForms";
 import { DataTable } from "@/components/tables/DataTable";
 import { Button } from "@/components/ui/Button";
@@ -59,8 +60,18 @@ export default function TeacherModulesPage() {
             initialPageSize={5}
             columns={[
               { key: "batch_name", header: "Batch" },
-              { key: "course_id", header: "Course ID" },
-              { key: "subcourse_id", header: "SubCourse ID" },
+              {
+                key: "course_name",
+                header: "Course",
+                render: (row) => courses.find((course) => course.course_id === row.course_id)?.course_name ?? "Mapped course",
+                getFilterValue: (row) => courses.find((course) => course.course_id === row.course_id)?.course_name ?? ""
+              },
+              {
+                key: "subcourse_name",
+                header: "SubCourse",
+                render: (row) => subcourses.find((subcourse) => subcourse.subcourse_id === row.subcourse_id)?.subcourse_name ?? "Mapped subcourse",
+                getFilterValue: (row) => subcourses.find((subcourse) => subcourse.subcourse_id === row.subcourse_id)?.subcourse_name ?? ""
+              },
               {
                 key: "actions",
                 header: "Actions",
@@ -88,10 +99,10 @@ export default function TeacherModulesPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand-500">Selected Batch</p>
               <h2 className="mt-2 text-xl font-semibold text-slate-900">{selectedBatch.batch_name}</h2>
               <p className="mt-2 text-sm text-slate-600">
-                Course: {selectedCourse?.course_name ?? selectedBatch.course_id}
+                Course: {selectedCourse?.course_name ?? "Mapped course"}
               </p>
               <p className="text-sm text-slate-600">
-                SubCourse: {selectedSubcourse?.subcourse_name ?? selectedBatch.subcourse_id}
+                SubCourse: {selectedSubcourse?.subcourse_name ?? "Mapped subcourse"}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -131,15 +142,14 @@ export default function TeacherModulesPage() {
             {modulesLoading ? (
               <p>Loading modules...</p>
             ) : (
-              <DataTable
-                rows={modules}
-                rowKey={(row) => row.module_id}
-                initialPageSize={5}
-                columns={[
-                  { key: "module_name", header: "Module" },
-                  { key: "module_id", header: "Module ID" },
-                  { key: "active", header: "Active", render: (row) => (row.active ? "Yes" : "No") }
-                ]}
+              <ModuleCatalogTable
+                modules={modules}
+                courses={selectedCourse ? [selectedCourse] : []}
+                subcourses={selectedSubcourse ? [selectedSubcourse] : []}
+                instituteId={instituteId ?? undefined}
+                disableCoursePathSelection
+                defaultCourseId={selectedBatch.course_id}
+                defaultSubcourseId={selectedBatch.subcourse_id}
               />
             )}
           </div>

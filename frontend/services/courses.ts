@@ -1,6 +1,7 @@
 import { api } from "@/services/client";
 import {
   Content,
+  CourseModuleExamData,
   Course,
   MessageResponse,
   Module,
@@ -157,8 +158,28 @@ export async function createModule(payload: {
   subcourse_id: string;
   module_name: string;
   institute_id?: string;
+  replace_existing?: boolean;
 }): Promise<Module> {
   const { data } = await api.post<Module>("/modules", payload);
+  return data;
+}
+
+export async function updateModule(
+  moduleId: string,
+  payload: {
+    course_id: string;
+    subcourse_id: string;
+    module_name: string;
+    institute_id?: string;
+    active: boolean;
+  }
+): Promise<Module> {
+  const { data } = await api.put<Module>(`/modules/${moduleId}`, payload);
+  return data;
+}
+
+export async function deleteModule(moduleId: string): Promise<MessageResponse> {
+  const { data } = await api.delete<MessageResponse>(`/modules/${moduleId}`);
   return data;
 }
 
@@ -172,17 +193,27 @@ function buildContentFormData(payload: {
   order_index?: number;
   category?: string;
   instructions?: string;
-  downloadable?: boolean;
   response_type?: string;
   duration?: number;
   institute_id?: string;
   replace_file?: boolean;
   file?: File | null;
   attempt_limit?: number;
+  exam_type_id?: string;
+  renderer_kind?: string;
+  timer_seconds?: number;
+  exam_parts?: string;
+  exam_metadata?: string;
+  visibility_scope?: "batch" | "selected_students";
+  assigned_student_ids?: string[];
 }) {
   const formData = new FormData();
   Object.entries(payload).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") {
+      return;
+    }
+    if (key === "assigned_student_ids" && Array.isArray(value)) {
+      formData.append("assigned_student_ids", JSON.stringify(value));
       return;
     }
     if (key === "file" && value instanceof File) {
@@ -191,9 +222,6 @@ function buildContentFormData(payload: {
     }
     formData.append(key, String(value));
   });
-  if (payload.downloadable === false) {
-    formData.append("downloadable", "false");
-  }
   if (payload.replace_file) {
     formData.append("replace_file", "true");
   }
@@ -210,20 +238,56 @@ export async function addContent(payload: {
   order_index?: number;
   category?: string;
   instructions?: string;
-  downloadable?: boolean;
   response_type?: string;
   duration?: number;
   institute_id?: string;
   attempt_limit?: number;
+  exam_type_id?: string;
+  renderer_kind?: string;
+  timer_seconds?: number;
+  exam_parts?: string;
+  exam_metadata?: string;
+  visibility_scope?: "batch" | "selected_students";
+  assigned_student_ids?: string[];
   file?: File | null;
 }): Promise<Content> {
   const { data } = await api.post<Content>("/content", buildContentFormData(payload));
   return data;
 }
 
-export async function previewGeneratedQuiz(file: File): Promise<NonNullable<Content["quiz"]>> {
+export async function addReusableContent(payload: {
+  module_id: string;
+  title: string;
+  type: string;
+  description?: string;
+  external_url?: string;
+  order_index?: number;
+  category?: string;
+  instructions?: string;
+  response_type?: string;
+  duration?: number;
+  institute_id?: string;
+  attempt_limit?: number;
+  exam_type_id?: string;
+  renderer_kind?: string;
+  timer_seconds?: number;
+  exam_parts?: string;
+  exam_metadata?: string;
+  file?: File | null;
+}): Promise<Content> {
+  const { data } = await api.post<Content>("/content-library", buildContentFormData(payload));
+  return data;
+}
+
+export async function previewGeneratedQuiz(payload: {
+  file: File;
+  category?: string;
+}): Promise<NonNullable<Content["quiz"]>> {
   const formData = new FormData();
-  formData.append("file", file);
+  formData.append("file", payload.file);
+  if (payload.category) {
+    formData.append("category", payload.category);
+  }
   const { data } = await api.post<NonNullable<Content["quiz"]>>("/content/quiz-preview", formData);
   return data;
 }
@@ -233,10 +297,28 @@ export async function getTecaiExam(contentId: string): Promise<TecaiExamData> {
   return data;
 }
 
+export async function getCourseModuleExam(
+  courseId: string,
+  examTypeId: string,
+  moduleId: string,
+  params?: { batch_id?: string; content_id?: string }
+): Promise<CourseModuleExamData> {
+  const { data } = await api.get<CourseModuleExamData>(
+    `/exam-rendering/course/${courseId}/exam-type/${examTypeId}/module/${moduleId}`,
+    { params }
+  );
+  return data;
+}
+
 export async function getModuleContents(moduleId: string, batchId: string): Promise<Content[]> {
   const { data } = await api.get<Content[]>(`/modules/${moduleId}/contents`, {
     params: { batch_id: batchId }
   });
+  return data;
+}
+
+export async function getReusableModuleContents(moduleId: string): Promise<Content[]> {
+  const { data } = await api.get<Content[]>(`/content-library/modules/${moduleId}`);
   return data;
 }
 
@@ -251,12 +333,18 @@ export async function updateContent(
     order_index?: number;
     category?: string;
     instructions?: string;
-    downloadable?: boolean;
     response_type?: string;
     duration?: number;
     institute_id?: string;
     replace_file?: boolean;
     attempt_limit?: number;
+    exam_type_id?: string;
+    renderer_kind?: string;
+    timer_seconds?: number;
+    exam_parts?: string;
+    exam_metadata?: string;
+    visibility_scope?: "batch" | "selected_students";
+    assigned_student_ids?: string[];
     file?: File | null;
   }
 ): Promise<Content> {
@@ -264,8 +352,56 @@ export async function updateContent(
   return data;
 }
 
+export async function updateReusableContent(
+  contentId: string,
+  payload: {
+    module_id?: string;
+    title?: string;
+    type?: string;
+    description?: string;
+    external_url?: string;
+    order_index?: number;
+    category?: string;
+    instructions?: string;
+    response_type?: string;
+    duration?: number;
+    institute_id?: string;
+    replace_file?: boolean;
+    attempt_limit?: number;
+    exam_type_id?: string;
+    renderer_kind?: string;
+    timer_seconds?: number;
+    exam_parts?: string;
+    exam_metadata?: string;
+    file?: File | null;
+  }
+): Promise<Content> {
+  const { data } = await api.put<Content>(`/content-library/${contentId}`, buildContentFormData(payload));
+  return data;
+}
+
 export async function deleteContent(contentId: string): Promise<MessageResponse> {
   const { data } = await api.delete<MessageResponse>(`/content/${contentId}`);
+  return data;
+}
+
+export async function assignReusableContentToBatch(
+  contentId: string,
+  payload: {
+    batch_id: string;
+    visibility_scope?: "batch" | "selected_students";
+    assigned_student_ids?: string[];
+    order_index?: number;
+    title?: string;
+    institute_id?: string;
+  }
+): Promise<Content> {
+  const { data } = await api.post<Content>(`/content-library/${contentId}/assign`, payload);
+  return data;
+}
+
+export async function deleteReusableContent(contentId: string): Promise<MessageResponse> {
+  const { data } = await api.delete<MessageResponse>(`/content-library/${contentId}`);
   return data;
 }
 
@@ -301,6 +437,15 @@ export async function submitStudentContentResponse(payload: {
   response_type: string;
   response_text?: string;
   response_url?: string;
+  exam_responses?: Array<{
+    part_id?: string;
+    question_id?: string;
+    response_text?: string;
+    response_data?: Record<string, unknown>;
+    word_count?: number;
+    duration_seconds?: number;
+  }>;
+  time_taken_seconds?: number;
   answers?: Array<{
     question_id: string;
     selected_option_id?: string;

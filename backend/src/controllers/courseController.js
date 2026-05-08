@@ -52,3 +52,10 @@ exports.getModules = asyncHandler(async (req, res) =>
     })
   )
 );
+exports.editModule = asyncHandler(async (req, res) =>
+  res.json(await service.updateModule(req.params.moduleId, req.body, req.tenant, req.user))
+);
+exports.removeModule = asyncHandler(async (req, res) => {
+  await service.deleteModule(req.params.moduleId, req.tenant, req.user);
+  res.json({ message: "Module deleted successfully." });
+});
