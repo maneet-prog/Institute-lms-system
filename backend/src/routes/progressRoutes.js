@@ -5,8 +5,7 @@ const { protect, allowRoles } = require("../middlewares/authMiddleware");
 const { progressSchema } = require("../validations/enrollmentValidation");
 
 const router = express.Router();
-router.use(protect, allowRoles("student"));
-router.post("/mark-complete", validate(progressSchema), controller.markComplete);
-router.get("/me", controller.myProgress);
+router.post("/mark-complete", protect, allowRoles("student"), validate(progressSchema), controller.markComplete);
+router.get("/me", protect, allowRoles("student"), controller.myProgress);
 
 module.exports = router;

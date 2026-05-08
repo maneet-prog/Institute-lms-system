@@ -4,14 +4,13 @@ const { protect, allowRoles } = require("../middlewares/authMiddleware");
 
 const router = express.Router();
 
-router.use(protect);
 router.get(
-  "/exam-rendering/course/:courseId/exam-type/:examTypeId/module/:moduleId",
+  "/exam-rendering/course/:courseId/exam-type/:examTypeId/module/:moduleId", protect,
   allowRoles("super_admin", "institute_admin", "teacher", "student"),
   controller.resolveCourseModuleExam
 );
 router.get(
-  "/exam-submissions",
+  "/exam-submissions", protect,
   allowRoles("super_admin", "institute_admin", "teacher"),
   controller.listSubmissions
 );

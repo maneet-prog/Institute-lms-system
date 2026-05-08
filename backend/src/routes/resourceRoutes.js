@@ -4,8 +4,7 @@ const { protect, allowRoles } = require("../middlewares/authMiddleware");
 
 const router = express.Router();
 
-router.use(protect, allowRoles("super_admin", "institute_admin", "teacher"));
-router.post("/assign", controller.assign);
-router.post("/remove", controller.remove);
+router.post("/assign", protect, allowRoles("super_admin", "institute_admin", "teacher"), controller.assign);
+router.post("/remove", protect, allowRoles("super_admin", "institute_admin", "teacher"), controller.remove);
 
 module.exports = router;

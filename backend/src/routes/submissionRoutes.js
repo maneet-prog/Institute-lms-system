@@ -6,8 +6,7 @@ const { submissionReviewSchema } = require("../validations/enrollmentValidation"
 
 const router = express.Router();
 
-router.use(protect, allowRoles("super_admin", "institute_admin", "teacher"));
-router.get("/", controller.list);
-router.put("/:submissionId/review", validate(submissionReviewSchema), controller.review);
+router.get("/", protect, allowRoles("super_admin", "institute_admin", "teacher"), controller.list);
+router.put("/:submissionId/review", protect, allowRoles("super_admin", "institute_admin", "teacher"), validate(submissionReviewSchema), controller.review);
 
 module.exports = router;
