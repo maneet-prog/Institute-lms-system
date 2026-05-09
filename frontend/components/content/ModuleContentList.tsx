@@ -8,7 +8,6 @@ import {
   useBatchDetailQuery,
   useDeleteContentMutation,
   useModuleContentsQuery,
-  useQuizPreviewMutation,
   useUpdateContentMutation
 } from "@/hooks/useLmsQueries";
 import { Button } from "@/components/ui/Button";
@@ -68,22 +67,23 @@ export function ModuleContentList({
   const { data: batchDetail } = useBatchDetailQuery(batchId);
   const deleteContent = useDeleteContentMutation();
   const updateContent = useUpdateContentMutation();
-  const previewQuiz = useQuizPreviewMutation();
   const [selectedContent, setSelectedContent] = useState<Content | null>(null);
   const [form, setForm] = useState<EditFormState | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const studentOptions = (batchDetail?.students || []).map((student) => ({
     label: `${student.first_name} ${student.last_name}`,
     value: student.user_id
   }));
 
   const generatedPreviewContent =
-    selectedContent && form?.type === "quiz" && previewQuiz.data
+    selectedContent && form?.type === "quiz" && previewUrl
       ? {
           ...selectedContent,
           title: form.title || selectedContent.title,
           instructions: form.instructions,
           duration: form.duration,
-          quiz: previewQuiz.data
+          file_url: previewUrl,
+          quiz: null
         }
       : null;
 
@@ -116,14 +116,14 @@ export function ModuleContentList({
                     icon={<Pencil className="h-4 w-4" />}
                     label={`Edit ${content.title}`}
                     onClick={() => {
-                      previewQuiz.reset();
+                      setPreviewUrl(null);
                       setSelectedContent(content);
                       setForm(buildInitialForm(content));
                     }}
                   />
                   {content.type === "quiz" &&
-                  (content.quiz?.renderer?.kind === "tecai_reading" ||
-                    content.quiz?.renderer?.kind === "tecai_writing") ? (
+                  (content.category === "reading" ||
+                    content.category === "writing") ? (
                     <IconButton
                       icon={<Eye className="h-4 w-4" />}
                       label={`Preview ${content.title}`}
@@ -154,7 +154,7 @@ export function ModuleContentList({
         title="Update Content"
         open={Boolean(selectedContent && form)}
         onClose={() => {
-          previewQuiz.reset();
+          setPreviewUrl(null);
           setSelectedContent(null);
           setForm(null);
         }}
@@ -180,7 +180,7 @@ export function ModuleContentList({
                   ]}
                   value={form.type}
                   onChange={(e) => {
-                    previewQuiz.reset();
+                    setPreviewUrl(null);
                     setForm((prev) =>
                       prev
                         ? {
@@ -268,15 +268,13 @@ export function ModuleContentList({
                     variant="secondary"
                     onClick={() => {
                       if (form.file) {
-                        previewQuiz.mutate({
-                          file: form.file,
-                          category: form.category
-                        });
+                        if (previewUrl) URL.revokeObjectURL(previewUrl);
+                        setPreviewUrl(URL.createObjectURL(form.file));
                       }
                     }}
-                    disabled={!form.file || previewQuiz.isPending}
+                    disabled={!form.file}
                   >
-                    {previewQuiz.isPending ? "Generating Preview..." : "Generate Preview"}
+                    Generate Preview
                   </Button>
                 </div>
 
@@ -287,21 +285,17 @@ export function ModuleContentList({
                     type="file"
                     accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     onChange={(e) => {
-                      previewQuiz.reset();
+                      setPreviewUrl(null);
                       setForm((prev) => (prev ? { ...prev, file: e.target.files?.[0] ?? null } : prev));
                     }}
                   />
                 </div>
 
-                {previewQuiz.error ? (
-                  <p className="text-sm text-rose-700">
-                    {(previewQuiz.error as Error).message || "Unable to generate quiz preview."}
-                  </p>
-                ) : null}
+
 
                 {generatedPreviewContent ||
-                selectedContent.quiz?.renderer?.kind === "tecai_reading" ||
-                selectedContent.quiz?.renderer?.kind === "tecai_writing" ? (
+                selectedContent.category === "reading" ||
+                selectedContent.category === "writing" ? (
                   <div className="rounded-xl border border-slate-200 bg-white p-4">
                     <p className="text-sm text-slate-600">
                       Open the exact preview in a new tab to verify layout, content rendering, inputs, and timer behavior.
@@ -320,8 +314,8 @@ export function ModuleContentList({
                           Open Exact Preview
                         </Button>
                       ) : null}
-                      {selectedContent.quiz?.renderer?.kind === "tecai_reading" ||
-                      selectedContent.quiz?.renderer?.kind === "tecai_writing" ? (
+                      {selectedContent.category === "reading" ||
+                      selectedContent.category === "writing" ? (
                         <Button
                           type="button"
                           variant="secondary"
@@ -389,7 +383,7 @@ export function ModuleContentList({
                     },
                     {
                       onSuccess: () => {
-                        previewQuiz.reset();
+                        setPreviewUrl(null);
                         setSelectedContent(null);
                         setForm(null);
                       }

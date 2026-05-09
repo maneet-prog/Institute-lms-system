@@ -94,13 +94,6 @@ export function ReusableContentWorkspace({ badge, title, description }: Props) {
             onChange={(e) => setSelectedModuleId(e.target.value)}
             disabled={!selectedSubcourseId}
           />
-          <Select
-            label="Batch To Assign"
-            options={[{ label: "Select batch", value: "" }, ...filteredBatches.map((batch) => ({ label: batch.batch_name, value: batch.batch_id }))]}
-            value={selectedBatchId}
-            onChange={(e) => setSelectedBatchId(e.target.value)}
-            disabled={!selectedSubcourseId}
-          />
         </div>
       </Card>
 
@@ -132,7 +125,7 @@ export function ReusableContentWorkspace({ badge, title, description }: Props) {
           <div className="mt-4">
             <ReusableContentLibrary
               moduleId={selectedModuleId || undefined}
-              selectedBatchId={selectedBatchId || undefined}
+              batches={filteredBatches}
               instituteId={selectedInstituteId}
             />
           </div>

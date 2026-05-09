@@ -9,8 +9,7 @@ import {
   useAssignReusableContentMutation,
   useBatchDetailQuery,
   useModulesQuery,
-  useReusableModuleContentsQuery,
-  useQuizPreviewMutation
+  useReusableModuleContentsQuery
 } from "@/hooks/useLmsQueries";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -47,7 +46,6 @@ export function AddContentForm({
   const addContent = useAddContentMutation();
   const addReusableContent = useAddReusableContentMutation();
   const assignReusableContent = useAssignReusableContentMutation();
-  const previewQuiz = useQuizPreviewMutation();
   const role = useAuthStore((state) => state.role);
   const canUseReusableLibrary = mode === "batch" && (role === "super_admin" || role === "institute_admin");
 
@@ -65,6 +63,8 @@ export function AddContentForm({
     assigned_student_ids: [] as string[],
     file: null as File | null
   });
+
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     setContent((prev) => ({
@@ -110,7 +110,7 @@ export function AddContentForm({
   const supportsDocxGenerator = content.category === "reading" || content.category === "writing";
 
   const quizPreviewContent =
-    supportsDocxGenerator && previewQuiz.data
+    supportsDocxGenerator && previewUrl
       ? {
           content_id: "preview-quiz",
           institute_id: instituteId ?? "",
@@ -119,7 +119,7 @@ export function AddContentForm({
           title: content.title || `Generated ${content.category} preview`,
           type: "quiz",
           description: null,
-          file_url: null,
+          file_url: previewUrl,
           external_url: null,
           resolved_url: null,
           order_index: content.order_index,
@@ -127,7 +127,7 @@ export function AddContentForm({
           body_text: null,
           instructions: "",
           response_type: null,
-          quiz: previewQuiz.data,
+          quiz: null,
           url: null,
           duration: content.duration,
           exam: null
@@ -204,7 +204,7 @@ export function AddContentForm({
         assigned_student_ids: [],
         file: null
       }));
-      previewQuiz.reset();
+      setPreviewUrl(null);
       onSuccess?.();
     };
 
@@ -398,15 +398,13 @@ export function AddContentForm({
               variant="secondary"
               onClick={() => {
                 if (content.file) {
-                  previewQuiz.mutate({
-                    file: content.file,
-                    category: content.category
-                  });
+                  if (previewUrl) URL.revokeObjectURL(previewUrl);
+                  setPreviewUrl(URL.createObjectURL(content.file));
                 }
               }}
-              disabled={!content.file || previewQuiz.isPending}
+              disabled={!content.file}
             >
-              {previewQuiz.isPending ? "Generating Preview..." : "Generate Preview"}
+              Generate Preview
             </Button>
           </div>
 
@@ -418,7 +416,7 @@ export function AddContentForm({
                 type="file"
                 accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 onChange={(e) => {
-                  previewQuiz.reset();
+                  setPreviewUrl(null);
                   setContent((prev) => ({ ...prev, file: e.target.files?.[0] ?? null }));
                 }}
               />
@@ -439,11 +437,7 @@ export function AddContentForm({
             </div>
           </div>
 
-          {previewQuiz.error ? (
-            <p className="mt-3 text-sm text-rose-700">
-              {(previewQuiz.error as Error).message || `Unable to generate ${content.category} preview.`}
-            </p>
-          ) : null}
+
 
           {quizPreviewContent ? (
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">

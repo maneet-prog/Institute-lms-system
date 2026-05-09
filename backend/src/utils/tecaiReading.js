@@ -18,6 +18,7 @@ const sanitizeRenderer = (renderer) => {
   }
 
   if (renderer.kind === TECAI_READING_KIND && Array.isArray(renderer.paragraphs)) {
+    console.log("DEBUG: Renderer entering Sanitize:", renderer);
     return {
       kind: TECAI_READING_KIND,
       timer_seconds:
@@ -314,6 +315,8 @@ const buildTecaiWritingQuizFromDocx = async (file) => {
 
   const xml = await documentFile.async("string");
   const blocks = await parseDocument(xml, zip);
+
+  console.log("DEBUG: Raw Blocks parsed from DOCX:", JSON.stringify(blocks, null, 2));
 
   return {
     mode: "written",

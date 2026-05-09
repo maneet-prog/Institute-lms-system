@@ -25,9 +25,11 @@ export default function TecaiPreviewExamPage() {
   }
 
   if (
-    !previewContent?.quiz?.renderer ||
-    (previewContent.quiz.renderer.kind !== "tecai_reading" &&
-      previewContent.quiz.renderer.kind !== "tecai_writing")
+    !previewContent ||
+    (previewContent.category !== "reading" &&
+      previewContent.category !== "writing" &&
+      previewContent.category !== "listening" &&
+      previewContent.category !== "speaking")
   ) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100 text-sm text-slate-600">
@@ -39,7 +41,6 @@ export default function TecaiPreviewExamPage() {
   return (
     <TecaiExamFrame
       content={previewContent}
-      renderer={previewContent.quiz.renderer}
       autoStart
       allowSave={false}
     />

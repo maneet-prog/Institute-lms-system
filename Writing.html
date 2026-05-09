@@ -129,6 +129,17 @@
             font-weight: bold;
             color: #0b1f3a;
         }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        td {
+            border: 1px solid #ccc;
+            padding: 8px;
+        }
     </style>
 </head>
 
@@ -231,9 +242,106 @@
                     }
                     content.push(p_html);
                 }
+                if (node.nodeName === "w:tbl") {
+                    const tableHTML = await renderTable(node, zip);
+                    content.push({ type: "table", html: tableHTML });
+                }
             }
             return content;
         }
+
+        async function renderTable(tblNode, zip) {
+            let html = "<table border='1' style='border-collapse:collapse;width:100%'>";
+
+            const rows = tblNode.getElementsByTagName("w:tr");
+
+            for (let row of rows) {
+                html += "<tr>";
+
+                const cells = row.getElementsByTagName("w:tc");
+
+                for (let cell of cells) {
+                    html += "<td style='padding:8px;'>";
+
+                    const paragraphs = cell.getElementsByTagName("w:p");
+
+                    for (let p of paragraphs) {
+
+                        const texts = p.getElementsByTagName("w:t");
+
+                        let fullText = "";
+
+                        for (let t of texts) {
+                            fullText += t.textContent;
+                        }
+
+                        // IMPORTANT: normalize spaces
+                        fullText = fullText.replace(/\s+/g, " ").trim();
+
+                        // APPLY TECAI
+                        let parsed = parseTECAIInline(fullText);
+
+                        html += `<div>${parsed}</div>`;
+                    }
+
+                    // IMAGE
+                    const drawings = cell.getElementsByTagName("w:drawing");
+                    const relsXml = await zip.file("word/_rels/document.xml.rels").async("text");
+                    const relsDoc = new DOMParser().parseFromString(relsXml, "text/xml");
+                    const relationships = Array.from(relsDoc.getElementsByTagName("Relationship"));
+
+                    for (let d of drawings) {
+                        const blip = d.getElementsByTagName("a:blip")[0];
+                        if (!blip) continue;
+
+                        const embed = blip.getAttribute("r:embed");
+                        const relsDoc = new DOMParser().parseFromString(relsXml, "text/xml");
+
+                        const rel = relationships.find(r => r.getAttribute("Id") === embed);
+
+                        if (rel) {
+                            const target = rel.getAttribute("Target");
+                            const imgFile = "word/" + target;
+
+                            const blob = await zip.file(imgFile).async("blob");
+                            const url = URL.createObjectURL(blob);
+
+                            html += `<br><img src="${url}" style="max-width:150px;">`;
+                        }
+                    }
+
+                    html += "</td>";
+                }
+
+                html += "</tr>";
+            }
+
+            html += "</table><br>";
+            return html;
+        }
+
+        function parseTECAIInline(text) {
+
+            if (!text) return "";
+
+            let output = text;
+
+            // [TECAI Type 6]
+            output = output.replace(/\[TECAI\s*Type\s*6\]/gi, () => {
+                return `<b>${qNum++}.</b>
+        <input name="q${qNum - 1}" style="width:100px;margin:0 5px;">`;
+            });
+
+            // [ input box ]
+            output = output.replace(/\[\s*input\s*box\s*\]/gi, () => {
+                return `<b>${qNum++}.</b>
+        <input name="q${qNum - 1}" style="width:100px;margin:0 5px;">`;
+            });
+
+            return output;
+        }
+
+
 
         async function getImageHtml(drawingNode, zip) {
             const blip = drawingNode.getElementsByTagName("a:blip")[0];
@@ -254,7 +362,22 @@
         }
 
         function renderTask(content) {
-            document.getElementById("left").innerHTML = content.map(p => `<p>${p}</p>`).join("");
+            const leftPanel = document.getElementById("left");
+            leftPanel.innerHTML = ""; // Clear existing content
+
+            content.forEach(item => {
+                if (typeof item === 'string') {
+                    // It's a standard paragraph
+                    const p = document.createElement("p");
+                    p.innerHTML = item;
+                    leftPanel.appendChild(p);
+                } else if (item.type === "table") {
+                    // It's a table object
+                    const div = document.createElement("div");
+                    div.innerHTML = item.html;
+                    leftPanel.appendChild(div);
+                }
+            });
         }
 
         function updateWordCount() {

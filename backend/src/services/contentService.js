@@ -15,8 +15,7 @@ const {
 const { uploadFile, deleteFile } = require("./storageService");
 const { validateQuizDefinition } = require("../utils/quiz");
 const {
-  buildTecaiQuizFromDocx,
-  buildTecaiWritingQuizFromDocx,
+  buildTecaiWritingRenderer,
   sanitizeRenderer,
   TECAI_WRITING_KIND,
   DEFAULT_TIMER_SECONDS
@@ -93,10 +92,12 @@ const validateContentState = ({ contentType, description, fileUrl, externalUrl, 
     throw new AppError("File content requires either an uploaded file or an external URL.", 400);
   }
   if (contentType === "quiz") {
-    if (!quiz) {
-      throw new AppError("Quiz content requires a generated DOCX source or quiz payload.", 400);
+    if (!quiz && !fileUrl && !externalUrl) {
+      throw new AppError("Quiz content requires an uploaded file, an external URL, or a quiz payload.", 400);
     }
-    validateQuizDefinition(quiz);
+    if (quiz) {
+      validateQuizDefinition(quiz);
+    }
   } else if (contentType === "text" && !((description || "").trim() || externalUrl)) {
     throw new AppError("Text content requires a description or an external URL.", 400);
   }
@@ -355,25 +356,11 @@ const resolveExamRenderer = (content) => {
 };
 
 const previewQuiz = async (file, options = {}) => {
-  const category = options.category || "reading";
-  const quiz =
-    category === "writing" ? await buildTecaiWritingQuizFromDocx(file) : await buildTecaiQuizFromDocx(file);
   return {
-    mode: quiz.mode,
-    attempt_limit: quiz.attemptLimit ?? 999,
-    questions: (quiz.questions || []).map((question) => ({
-      question_id: question.questionId,
-      type: question.type,
-      prompt: question.prompt,
-      options: (question.options || []).map((option) => ({
-        option_id: option.optionId,
-        text: option.text
-      })),
-      correct_option_id: question.correctOptionId ?? null,
-      reference_answer: question.referenceAnswer ?? null,
-      max_marks: question.maxMarks ?? 1
-    })),
-    renderer: sanitizeRenderer(quiz.renderer)
+    mode: "written",
+    attempt_limit: 999,
+    questions: [],
+    renderer: null
   };
 };
 
@@ -405,10 +392,7 @@ const getTecaiExamData = async (contentId, tenant, currentUser) => {
     throw new AppError("Content not found.", 404);
   }
 
-  const renderer = resolveExamRenderer(content);
-  if (!renderer) {
-    throw new AppError("Exam renderer data is not configured for this quiz.", 400);
-  }
+  const renderer = resolveExamRenderer(content) || null;
 
   let submission;
   if (hasRole(currentUser, "student")) {
@@ -456,10 +440,8 @@ const createContent = async (payload, file, tenant, user) => {
     const parsedExamParts = normalizeExamParts(parseOptionalJson(payload.exam_parts, "exam_parts"));
 
     if (payload.type === "quiz") {
-      if (rendererKind === TECAI_WRITING_KIND || category === "writing") {
-        if (file) {
-          quiz = await buildTecaiWritingQuizFromDocx(file);
-        } else {
+      if (!file) {
+        if (rendererKind === TECAI_WRITING_KIND || category === "writing") {
           if (!parsedExamParts.length) {
             throw new AppError("Writing exams require a DOCX file or at least one task in exam_parts.", 400);
           }
@@ -474,8 +456,6 @@ const createContent = async (payload, file, tenant, user) => {
             })
           };
         }
-      } else {
-        quiz = file ? await buildTecaiQuizFromDocx(file) : null;
       }
       if (quiz && payload.attempt_limit !== undefined) {
         quiz.attemptLimit = Math.max(0, Number(payload.attempt_limit) || 0);
@@ -617,27 +597,23 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
     parseOptionalJson(payload.exam_parts, "exam_parts") ?? content.profile?.exam?.parts ?? []
   );
   const nextQuiz =
-    nextType === "quiz"
-      ? nextRendererKind === TECAI_WRITING_KIND || nextCategory === "writing"
-        ? file
-          ? await buildTecaiWritingQuizFromDocx(file)
-          : parsedExamParts.length
-            ? {
-                mode: "written",
-                attemptLimit: Math.max(0, Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 0) || 0),
-                questions: [],
-                renderer: buildWritingRenderer({
-                  instructions:
-                    payload.instructions !== undefined ? payload.instructions || "" : content.profile?.instructions || "",
-                  timerSeconds: nextTimerSeconds,
-                  parts: parsedExamParts
-                })
-              }
-            : content.profile?.quiz || null
-        : file
-          ? await buildTecaiQuizFromDocx(file)
+    nextType === "quiz" && !file
+      ? (nextRendererKind === TECAI_WRITING_KIND || nextCategory === "writing")
+        ? parsedExamParts.length
+          ? {
+              mode: "written",
+              attemptLimit: Math.max(0, Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 0) || 0),
+              questions: [],
+              renderer: buildWritingRenderer({
+                instructions:
+                  payload.instructions !== undefined ? payload.instructions || "" : content.profile?.instructions || "",
+                timerSeconds: nextTimerSeconds,
+                parts: parsedExamParts
+              })
+            }
           : content.profile?.quiz || null
-      : null;
+        : content.profile?.quiz || null
+      : content.profile?.quiz || null;
 
   if (
     nextType === "quiz" &&
@@ -766,10 +742,8 @@ const createReusableContent = async (payload, file, tenant, user) => {
     const parsedExamParts = normalizeExamParts(parseOptionalJson(payload.exam_parts, "exam_parts"));
 
     if (payload.type === "quiz") {
-      if (rendererKind === TECAI_WRITING_KIND || category === "writing") {
-        if (file) {
-          quiz = await buildTecaiWritingQuizFromDocx(file);
-        } else {
+      if (!file) {
+        if (rendererKind === TECAI_WRITING_KIND || category === "writing") {
           if (!parsedExamParts.length) {
             throw new AppError("Writing exams require a DOCX file or at least one task in exam_parts.", 400);
           }
@@ -784,8 +758,6 @@ const createReusableContent = async (payload, file, tenant, user) => {
             })
           };
         }
-      } else {
-        quiz = file ? await buildTecaiQuizFromDocx(file) : null;
       }
       if (quiz && payload.attempt_limit !== undefined) {
         quiz.attemptLimit = Math.max(0, Number(payload.attempt_limit) || 0);
@@ -905,28 +877,31 @@ const updateReusableContent = async (id, payload, file, tenant, currentUser) => 
   const parsedExamParts = normalizeExamParts(
     parseOptionalJson(payload.exam_parts, "exam_parts") ?? content.profile?.exam?.parts ?? []
   );
-  const nextQuiz =
-    nextType === "quiz"
-      ? nextRendererKind === TECAI_WRITING_KIND || nextCategory === "writing"
-        ? file
-          ? await buildTecaiWritingQuizFromDocx(file)
-          : parsedExamParts.length
-            ? {
-                mode: "written",
-                attemptLimit: Math.max(0, Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 0) || 0),
-                questions: [],
-                renderer: buildWritingRenderer({
-                  instructions:
-                    payload.instructions !== undefined ? payload.instructions || "" : content.profile?.instructions || "",
-                  timerSeconds: nextTimerSeconds,
-                  parts: parsedExamParts
-                })
-              }
-            : content.profile?.quiz || null
-        : file
-          ? await buildTecaiQuizFromDocx(file)
-          : content.profile?.quiz || null
-      : null;
+  let nextQuiz = null;
+
+  if (nextType === "quiz") {
+    if (!file) {
+      if (nextRendererKind === TECAI_WRITING_KIND || nextCategory === "writing") {
+        if (parsedExamParts.length) {
+          nextQuiz = {
+            mode: "written",
+            attemptLimit: Math.max(0, Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 0) || 0),
+            questions: [],
+            renderer: buildWritingRenderer({
+              instructions:
+                payload.instructions !== undefined ? payload.instructions || "" : content.profile?.instructions || "",
+              timerSeconds: nextTimerSeconds,
+              parts: parsedExamParts
+            })
+          };
+        } else {
+          nextQuiz = content.profile?.quiz || null;
+        }
+      } else {
+        nextQuiz = content.profile?.quiz || null;
+      }
+    }
+  }
 
   if (
     nextType === "quiz" &&
@@ -1027,6 +1002,15 @@ const assignReusableContent = async (contentId, payload, tenant, currentUser) =>
   assertBatchModuleLink(batch, moduleItem);
 
   const visibility = await resolveAssignedStudents({ payload, batch, instituteId });
+
+  const existing = await Content.findOne({
+    batchId: batch._id,
+    sourceContentId: template._id,
+    active: true
+  });
+  if (existing) {
+    return serializeContent(existing, { includeQuizAnswers: true });
+  }
 
   const content = await Content.create({
     instituteId,

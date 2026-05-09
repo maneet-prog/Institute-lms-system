@@ -67,15 +67,16 @@ export function ContentRenderer({ content }: { content: Content | StudentWorkspa
 
   if (content.type === "quiz") {
     if (
-      content.quiz?.renderer?.kind === "tecai_reading" ||
-      content.quiz?.renderer?.kind === "tecai_writing"
+      content.category === "reading" ||
+      content.category === "writing" ||
+      content.category === "listening" ||
+      content.category === "speaking"
     ) {
       const submission = "submission" in content ? content.submission : null;
-      const attemptLimit = content.quiz.attempt_limit ?? 999;
+      const attemptLimit = content.quiz?.attempt_limit ?? 999;
       const attemptsUsed = submission?.attempts.length ?? 0;
       const canStart = !("submission" in content) || attemptsUsed < attemptLimit;
-      const examLabel =
-        content.quiz.renderer.kind === "tecai_writing" ? "TECAI Writing Exam" : "TECAI Reading Exam";
+      const examLabel = content.title || "TECAI Exam";
 
       return (
         <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
