@@ -17,7 +17,8 @@ export function TecaiExamFrame({
     allowSave = false
 }: {
     content: Content;
-    renderer?: any; // kept for backward compatibility if passed
+    // kept for backward compatibility if passed (not used in this component)
+    renderer?: unknown;
     submission?: StudentSubmission | null;
     studentName?: string;
     autoStart?: boolean;
