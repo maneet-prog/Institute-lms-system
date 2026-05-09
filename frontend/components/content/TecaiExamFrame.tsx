@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { useSubmitStudentContentMutation } from "@/hooks/useLmsQueries";
 import { Content, StudentSubmission } from "@/types/lms";
 
-import { ReadingExam } from "../exam-renderers/readingExam";
-import { WritingExam } from "../exam-renderers/writingExam";
-import { ListeningExam } from "../exam-renderers/listeningExam";
-import { SpeakingExam } from "../exam-renderers/speakingExam";
+import { ReadingExam } from "../exam-renderers/ReadingExam";
+import { WritingExam } from "../exam-renderers/WritingExam";
+import { ListeningExam } from "../exam-renderers/ListeningExam";
+import { SpeakingExam } from "../exam-renderers/SpeakingExam";
 
 export function TecaiExamFrame({
     content,
