@@ -292,6 +292,6 @@ export function WritingExam({
             srcDoc={htmlContent}
             style={{ width: "100vw", height: "100vh", border: "none" }}
             title="TECAI Writing Exam"
-        />
+        /> 
     );
 }
