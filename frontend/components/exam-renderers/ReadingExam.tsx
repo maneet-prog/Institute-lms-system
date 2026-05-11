@@ -248,6 +248,7 @@ export function ReadingExam({
             qNum = 1;
             type4Answers = {};
             renderedSets = new Set();
+            let currentType7Options = [];
 
             const answerRegex = /\\[TECAI\\s*TYPE\\s*4\\s*ANSWER\\s*SET\\s*(\\d+)\\]/i;
             const optionRegex = /\\[TECAI\\s*TYPE\\s*4\\s*OPTIONS\\s*START\\s*SET\\s*(\\d+)\\]/i;
@@ -364,6 +365,31 @@ export function ReadingExam({
                         rightHTML += \`<div id="q\${startQ}">\${out}</div>\`;
                         return;
                     }
+                    if (txt.includes("[TECAI TYPE 7]") && !txt.includes("OPTIONS")) {
+                        let clean = txt.replace(/\\[TECAI TYPE 7\\]/gi, "").trim();
+                        rightHTML += \`<div id="q\${qNum}"> <b>\${qNum}.</b> \${clean}\`;
+                        return;
+                    }
+
+                    if (txt.includes("[TECAI TYPE 7 OPTIONS]")) {
+                        return;
+                    }
+
+                    let prevP = content[content.indexOf(p)-1];
+                    if (prevP && prevP.text.includes("[TECAI TYPE 7 OPTIONS]") && !txt.includes("END")) {
+                        let options = txt.split("/").map(o => o.trim());
+
+                        let selectHTML = \`<select name = "q\${qNum}" style = "margin-left:10px; padding:4px;" >
+            <option value="">Select...</option>\`;
+                        options.forEach(opt => {
+                            selectHTML += \`<option value = "\${opt}" > \${opt}</option> \`;
+                        });
+                        selectHTML += \`</select></div> \`;
+
+                        rightHTML += selectHTML;
+                        qNum++;
+                        return;
+                    }
 
                     rightHTML += \`<p>\${line}</p>\`;
                 } else {
@@ -435,6 +461,7 @@ export function ReadingExam({
             for (let i = 1; i < qNum; i++) {
                 let checkedInputs = document.querySelectorAll(\`input[name="q\${i}"]:checked\`);
                 let textInputs = document.querySelectorAll(\`input[name="q\${i}"]:not([type="radio"]):not([type="checkbox"]), input[name^="q\${i}_"]:not([type="radio"]):not([type="checkbox"])\`);
+                let dropdown = document.querySelector(\`select[name="q\${i}"]\`);
                 let qDiv = document.getElementById(\`q\${i}\`);
                 let drops = qDiv ? qDiv.querySelectorAll(".dropzone") : [];
 
@@ -442,7 +469,11 @@ export function ReadingExam({
                     let values = [];
                     checkedInputs.forEach(input => values.push(input.value));
                     data.push(\`\${i}. \${values.join(" | ")}\`);
-                } else if (textInputs.length > 0) {
+                } else if (dropdown) {
+                    // NEW: Logic to capture dropdown selection
+                    data.push(\`\${i}. \${dropdown.value.trim() || " "}\`);
+                }
+                    else if (textInputs.length > 0) {
                     let values = [];
                     textInputs.forEach(inp => values.push(inp.value.trim() || " "));
                     data.push(\`\${i}. \${values.join(" | ")}\`);
@@ -482,6 +513,6 @@ export function ReadingExam({
             srcDoc={htmlContent}
             style={{ width: "100vw", height: "100vh", border: "none" }}
             title="TECAI Reading Exam"
-        /> 
+        />
     );
 }
