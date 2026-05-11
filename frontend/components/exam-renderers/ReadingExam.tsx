@@ -59,9 +59,11 @@ export function ReadingExam({
         .draggable { display: inline-block; padding: 5px 10px; margin: 5px; background: #0b1f3a; color: white; border-radius: 5px; cursor: grab; }
         .dropzone { display: inline-block; min-width: 120px; min-height: 25px; border-bottom: 2px solid #000; margin: 0 5px; }
         .question-nav { position: fixed; bottom: 0; width: 100%; height: 60px; background: white; border-top: 1px solid #ddd; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; padding: 5px; overflow-x: auto; }
-        .question-nav button { width: 35px; height: 35px; border-radius: 6px; background: #edf1f7; color: #333; font-weight: 600; }
+        .question-nav button { min-width: 35px; height: 35px; border-radius: 6px; background: #edf1f7; color: #333; font-weight: 600; }
         .question-nav button:hover { background: #0b1f3a; color: white; }
         #loadingOverlay { position: fixed; top: 115px; left: 0; width: 100%; height: calc(100% - 175px); background: rgba(255,255,255,0.9); display: flex; justify-content: center; align-items: center; z-index: 2000; font-size: 18px; color: #333; }
+        input[type="checkbox"]:disabled { opacity: 0.5; cursor: not-allowed; }
+        .type-8-group { padding: 10px; background: #f0f4f8; border-radius: 5px; margin-bottom: 15px; }
     </style>
 </head>
 <body>
@@ -391,6 +393,46 @@ export function ReadingExam({
                         return;
                     }
 
+                    // TYPE 8 (Multi-Select with Range Numbering)
+                    if (txt.match(/\\[TECAI\\s*TYPE\\s*8\\]/i)) {
+                        let limit = 2; // Default
+                        for (let i = content.indexOf(p); i < content.length; i++) {
+                            let peek = content[i].text;
+                            let m = peek.match(/\\[TECAI\\s*TYPE\\s*8\\.(\\d+)\\s*OPTIONS\\]/i);
+                            if (m) {
+                                limit = parseInt(m[1]);
+                                break;
+                            }
+                        }
+
+                        // 2. Format the range label (e.g., 41 – 42)
+                        let qRange = (limit > 1) ? \`\${qNum} – \${qNum+limit-1}\` : \`\${qNum}\`;
+                        let clean = txt.replace(/\\[TECAI\\s*TYPE\\s*8\\]/i, "");
+
+                        // 3. Add 'type-8-group' class and data-limit for the Navigation function to find
+                        rightHTML += \`<div id="q\${qNum}" class="question-container type-8-group" data-limit="\${limit}">
+                    <b>\${qRange}.</b> \${clean}<br>\`;
+                        return;
+                    }
+
+                    if (txt.match(/\\[TECAI\\s*TYPE\\s*8\\.(\\d+)\\s*OPTIONS\\]/i)) {
+                        let match = txt.match(/8\\.(\\d+)/);
+                        let limit = match ? parseInt(match[1]) : 2;
+                        let opts = txt.replace(/\\[TECAI\\s*TYPE\\s*8\\.\\d+\\s*OPTIONS\\]/i, "").split("/").map(o => o.trim());
+
+                        opts.forEach(opt => {
+                            rightHTML += \`
+            <label style="display:block; margin: 5px 0;">
+                <input type="checkbox" name="q\${qNum}" value="\${opt}" onchange="limitCheckboxes(this, \${limit})"> 
+                \${opt}
+            </label>\`;
+                        });
+
+                        rightHTML += \`</div>\`;
+                        qNum += limit; // Increment counter by the number of questions covered
+                        return;
+                    }
+
                     rightHTML += \`<p>\${line}</p>\`;
                 } else {
                     leftHTML += \`<p>\${p.html}</p>\`;
@@ -430,12 +472,56 @@ export function ReadingExam({
             }
         });
 
-        function createNav(n) {
-            let nav = "";
-            for (let i = 1; i <= n; i++) {
-                nav += \`<button onclick="document.getElementById('q\${i}').scrollIntoView()">\${i}</button>\`;
+        function createNav() {
+            const nav = document.getElementById("nav");
+            nav.innerHTML = "";
+            let processedQs = new Set();
+
+            for (let i = 1; i < qNum; i++) {
+                if (processedQs.has(i)) continue;
+
+                let btn = document.createElement("button");
+                btn.classList.add("nav-btn");
+
+                let container = document.getElementById(\`q\${i}\`);
+                let label = i.toString();
+
+                // Check if this is a Type 8 range
+                if (container && container.classList.contains("type-8-group")) {
+                    let limit = parseInt(container.getAttribute("data-limit") || "1");
+                    if (limit > 1) {
+                        label = \`\${i}–\${i+limit-1}\`;
+                        // Skip the hidden numbers in the range
+                        for (let j = 1; j < limit; j++) {
+                            processedQs.add(i + j);
+                        }
+                    }
+                }
+
+                btn.innerText = label;
+                btn.onclick = () => {
+                    document.getElementById(\`q\${i}\`).scrollIntoView({ behavior: "smooth" });
+                };
+                nav.appendChild(btn);
             }
-            document.getElementById("nav").innerHTML = nav;
+        }
+
+        function limitCheckboxes(el, max) {
+            let name = el.name;
+            let checkboxes = document.querySelectorAll(\`input[name="\${name}"]\`);
+            let checkedCount = document.querySelectorAll(\`input[name="\${name}"]:checked\`).length;
+
+            checkboxes.forEach(cb => {
+                if (checkedCount >= max) {
+                    // If limit reached, disable all UNCHECKED boxes
+                    if (!cb.checked) {
+                        cb.disabled = true;
+                    }
+                } else {
+                    // If below limit, ensure all boxes are enabled
+                    cb.disabled = false;
+                }
+            });
         }
 
         function buildAnswerText() {
@@ -464,6 +550,20 @@ export function ReadingExam({
                 let dropdown = document.querySelector(\`select[name="q\${i}"]\`);
                 let qDiv = document.getElementById(\`q\${i}\`);
                 let drops = qDiv ? qDiv.querySelectorAll(".dropzone") : [];
+
+                // Inside the for (let i = 1; i < qNum; i++) loop:
+                let container = document.getElementById(\`q\${i}\`);
+                if (container && container.classList.contains("type-8-group")) {
+                    let limit = parseInt(container.getAttribute("data-limit"));
+                    let checked = container.querySelectorAll('input:checked');
+                    let values = Array.from(checked).map(c => c.value);
+
+                    let rangeLabel = (limit > 1) ? \`\${i}–\${i + limit - 1}\` : \`\${i}\`;
+                    data.push(\`\${rangeLabel}. \${values.join(" | ") || " "}\`);
+
+                    i += (limit - 1); // Skip indices covered by range
+                    continue;
+                }
 
                 if (checkedInputs.length > 0) {
                     let values = [];
