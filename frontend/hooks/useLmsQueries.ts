@@ -46,6 +46,7 @@ import {
   getStudentDashboard,
   getStudentModules,
   submitStudentContentResponse,
+  updateStudentContentAccess,
   updateContent,
   updateReusableContent,
   updateCourse,
@@ -67,7 +68,16 @@ import {
   getUsers,
   getUsersByInstitute,
   updateProfile,
-  updateUser
+  updateUser,
+  getUserDetails,
+  enrollUser,
+  removeUserEnrollment,
+  assignUserToBatch,
+  removeUserFromBatch,
+  createUserContent,
+  updateUserContent,
+  deleteUserContent,
+  reviewUserSubmission
 } from "@/services/users";
 
 export function useInstitutesQuery(options?: { refetchInterval?: number }) {
@@ -693,6 +703,41 @@ export function useMarkProgressMutation() {
   });
 }
 
+export function useMarkContentProgressMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: markProgress,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["progress"] });
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["student-modules"] });
+      queryClient.invalidateQueries({ queryKey: ["student-batch-workspace"] });
+      pushToast("Content progress updated.", "success");
+    }
+  });
+}
+
+export function useUpdateStudentContentAccessMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      contentId,
+      payload
+    }: {
+      contentId: string;
+      payload: Parameters<typeof updateStudentContentAccess>[1];
+    }) => updateStudentContentAccess(contentId, payload),
+    onSuccess: (content) => {
+      queryClient.invalidateQueries({ queryKey: ["module-contents", content.batch_id, content.module_id] });
+      queryClient.invalidateQueries({ queryKey: ["student-batch-workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["student-modules"] });
+      queryClient.invalidateQueries({ queryKey: ["progress"] });
+      pushToast("Student content access updated.", "success");
+    }
+  });
+}
+
 export function useReviewSubmissionMutation() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -710,6 +755,115 @@ export function useReviewSubmissionMutation() {
       queryClient.invalidateQueries({ queryKey: ["student-batch-workspace"] });
       queryClient.invalidateQueries({ queryKey: ["tecai-exam"] });
       queryClient.invalidateQueries({ queryKey: ["course-module-exam"] });
+      pushToast("Submission reviewed successfully.", "success");
+    }
+  });
+}
+
+// User Details Management Hooks
+export function useUserDetailsQuery(userId: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ["user-details", userId],
+    queryFn: () => getUserDetails(userId),
+    enabled: options?.enabled ?? Boolean(userId)
+  });
+}
+
+export function useEnrollUserMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, ...payload }: { userId: string } & Parameters<typeof enrollUser>[1]) =>
+      enrollUser(userId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-details"] });
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      pushToast("User enrolled successfully.", "success");
+    }
+  });
+}
+
+export function useRemoveUserEnrollmentMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (enrollmentId: string) => removeUserEnrollment(enrollmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-details"] });
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      pushToast("User enrollment removed successfully.", "success");
+    }
+  });
+}
+
+export function useAssignUserToBatchMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, ...payload }: { userId: string } & Parameters<typeof assignUserToBatch>[1]) =>
+      assignUserToBatch(userId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-details"] });
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      pushToast("User assigned to batch successfully.", "success");
+    }
+  });
+}
+
+export function useRemoveUserFromBatchMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, batchAssignmentId }: { userId: string; batchAssignmentId: string }) =>
+      removeUserFromBatch(userId, batchAssignmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-details"] });
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      pushToast("User removed from batch successfully.", "success");
+    }
+  });
+}
+
+export function useCreateUserContentMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, ...payload }: { userId: string } & Parameters<typeof createUserContent>[1]) =>
+      createUserContent(userId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-details"] });
+      pushToast("Content created successfully.", "success");
+    }
+  });
+}
+
+export function useUpdateUserContentMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, contentId, ...payload }: { userId: string; contentId: string } & Parameters<typeof updateUserContent>[2]) =>
+      updateUserContent(userId, contentId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-details"] });
+      pushToast("Content updated successfully.", "success");
+    }
+  });
+}
+
+export function useDeleteUserContentMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, contentId }: { userId: string; contentId: string }) =>
+      deleteUserContent(userId, contentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-details"] });
+      pushToast("Content deleted successfully.", "success");
+    }
+  });
+}
+
+export function useReviewUserSubmissionMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, submissionId, ...payload }: { userId: string; submissionId: string } & Parameters<typeof reviewUserSubmission>[2]) =>
+      reviewUserSubmission(userId, submissionId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-details"] });
+      queryClient.invalidateQueries({ queryKey: ["reviewable-submissions"] });
       pushToast("Submission reviewed successfully.", "success");
     }
   });

@@ -4,6 +4,7 @@ const AppError = require("./AppError");
 
 const TECAI_READING_KIND = "tecai_reading";
 const TECAI_WRITING_KIND = "tecai_writing";
+const TECAI_LISTENING_KIND = "tecai_listening";
 const DEFAULT_TIMER_SECONDS = 3600;
 
 const normalizeParagraph = (paragraph) => ({
@@ -18,7 +19,6 @@ const sanitizeRenderer = (renderer) => {
   }
 
   if (renderer.kind === TECAI_READING_KIND && Array.isArray(renderer.paragraphs)) {
-    console.log("DEBUG: Renderer entering Sanitize:", renderer);
     return {
       kind: TECAI_READING_KIND,
       timer_seconds:
@@ -62,6 +62,17 @@ const sanitizeRenderer = (renderer) => {
       timer_seconds:
         Number(renderer.timer_seconds || renderer.timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS,
       blocks: renderer.blocks.map(normalizeParagraph)
+    };
+  }
+
+  if (renderer.kind === TECAI_LISTENING_KIND) {
+    return {
+      kind: TECAI_LISTENING_KIND,
+      timer_seconds:
+        Number(renderer.timer_seconds || renderer.timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS,
+      audio_url: typeof renderer.audio_url === "string" ? renderer.audio_url : "",
+      prompt_file_url: typeof renderer.prompt_file_url === "string" ? renderer.prompt_file_url : "",
+      instructions: typeof renderer.instructions === "string" ? renderer.instructions : ""
     };
   }
 
@@ -316,8 +327,6 @@ const buildTecaiWritingQuizFromDocx = async (file) => {
   const xml = await documentFile.async("string");
   const blocks = await parseDocument(xml, zip);
 
-  console.log("DEBUG: Raw Blocks parsed from DOCX:", JSON.stringify(blocks, null, 2));
-
   return {
     mode: "written",
     attemptLimit: 1,
@@ -333,6 +342,7 @@ const buildTecaiWritingQuizFromDocx = async (file) => {
 module.exports = {
   TECAI_READING_KIND,
   TECAI_WRITING_KIND,
+  TECAI_LISTENING_KIND,
   DEFAULT_TIMER_SECONDS,
   buildTecaiQuizFromDocx,
   buildTecaiWritingQuizFromDocx,

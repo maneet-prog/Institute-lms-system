@@ -5,6 +5,7 @@ const { protect, allowRoles } = require("../middlewares/authMiddleware");
 const upload = require("../middlewares/uploadMiddleware");
 const {
   contentSchema,
+  contentStudentAccessSchema,
   contentUpdateSchema,
   reusableContentSchema,
   reusableContentUpdateSchema,
@@ -30,6 +31,12 @@ router.get(
   controller.listReusableByModule
 );
 router.put("/content/:contentId", protect, allowRoles("super_admin", "institute_admin", "teacher"), upload.single("file"), validate(contentUpdateSchema), controller.edit);
+router.put(
+  "/content/:contentId/student-access", protect,
+  allowRoles("super_admin", "institute_admin"),
+  validate(contentStudentAccessSchema),
+  controller.updateStudentAccess
+);
 router.put(
   "/content-library/:contentId", protect,
   allowRoles("super_admin", "institute_admin"),

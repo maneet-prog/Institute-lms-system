@@ -7,18 +7,15 @@ const { UserBatch, UserCourse, UserModule, UserContent } = require("../models/En
 const AppError = require("../utils/AppError");
 const { serializeContent, serializeStudentSubmission } = require("../utils/serializers");
 const { gradeQuizSubmission, resolveQuizFromContent } = require("../utils/quiz");
-const { TECAI_WRITING_KIND } = require("../utils/tecaiReading");
+const { TECAI_READING_KIND, TECAI_WRITING_KIND, TECAI_LISTENING_KIND } = require("../utils/tecaiReading");
+const { isContentVisibleToStudent } = require("./contentVisibilityService");
+const { markContentCompletedForStudent } = require("./progressTrackingService");
 
 const getInstituteId = (user, tenant) => tenant?.instituteId || user?.instituteId || null;
 const average = (values) =>
   values.length ? Math.round(values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length) : 0;
 const formatChartLabel = (date) =>
   new Date(date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
-const isContentVisibleToStudent = (content, userId) =>
-  content.active !== false &&
-  (content.visibilityScope !== "selected_students" ||
-    (content.assignedStudentIds || []).some((studentId) => String(studentId) === String(userId)));
-
 const getLastAttempt = (submission) => {
   const attempts = submission?.attempts || [];
   return attempts.length ? attempts[attempts.length - 1] : null;
@@ -261,6 +258,16 @@ const getBatchWorkspace = async (batchId, category, user, tenant) => {
       }).sort({ orderIndex: 1, createdAt: 1, _id: 1 })
     : [];
   const visibleContents = contents.filter((content) => isContentVisibleToStudent(content, user._id));
+  const progressRows = modules.length
+    ? await UserProgress.find({
+        instituteId,
+        userId: user._id,
+        moduleId: { $in: modules.map((moduleItem) => moduleItem._id) }
+      }).lean()
+    : [];
+  const completedContentIds = new Set(
+    progressRows.flatMap((row) => (row.completedContentIds || []).map((contentId) => String(contentId)))
+  );
 
   const submissions = visibleContents.length
     ? await StudentSubmission.find({
@@ -282,6 +289,7 @@ const getBatchWorkspace = async (batchId, category, user, tenant) => {
   for (const content of filteredContents) {
     const serialized = {
       ...serializeContent(content, { includeQuizAnswers: false }),
+      completed: completedContentIds.has(String(content._id)),
       submission: submissionsByContent.get(String(content._id)) || null
     };
     if (!contentByModule.has(String(content.moduleId))) {
@@ -380,7 +388,7 @@ const getDashboard = async (user, tenant) => {
         moduleId: { $in: moduleIds },
         active: true
       })
-        .select("moduleId batchId title duration type visibilityScope assignedStudentIds")
+        .select("moduleId batchId title duration type visibilityScope assignedStudentIds hiddenStudentIds")
         .sort({ orderIndex: 1, createdAt: 1, _id: 1 })
         .lean()
     : [];
@@ -556,6 +564,15 @@ const getDashboard = async (user, tenant) => {
   };
 };
 
+const markSubmittedContentComplete = async ({ instituteId, userId, content }) =>
+  markContentCompletedForStudent({
+    instituteId: String(instituteId),
+    userId: String(userId),
+    moduleId: String(content.moduleId),
+    contentId: String(content._id),
+    completed: true
+  });
+
 const submitContent = async (payload, user, tenant) => {
   const instituteId = getInstituteId(user, tenant);
   if (!instituteId) {
@@ -581,16 +598,13 @@ const submitContent = async (payload, user, tenant) => {
     contentId: content._id,
     active: true
   });
-  const isDirectlyAssigned =
-    content.visibilityScope === "selected_students"
-      ? (content.assignedStudentIds || []).some((studentId) => String(studentId) === String(user._id))
-      : false;
+  const isVisibleByBatchRules = isContentVisibleToStudent(content, user._id);
 
   if (!assignments.length && !userContent) {
     throw new AppError("Content access denied.", 403);
   }
 
-  if (content.visibilityScope === "selected_students" && !isDirectlyAssigned && !userContent) {
+  if (!isVisibleByBatchRules && !userContent) {
     throw new AppError("Content access denied.", 403);
   }
 
@@ -614,7 +628,7 @@ const submitContent = async (payload, user, tenant) => {
 
     const attemptNumber = currentAttemptCount + 1;
 
-    if (quiz.renderer?.kind === "tecai_reading") {
+    if (quiz.renderer?.kind === TECAI_READING_KIND || quiz.renderer?.kind === TECAI_LISTENING_KIND) {
       if (!(payload.response_text || "").trim()) {
         throw new AppError("Exam answers are missing for this submission.", 400);
       }
@@ -625,6 +639,16 @@ const submitContent = async (payload, user, tenant) => {
         responseText: payload.response_text,
         responseUrl: null,
         answers: [],
+        examResponses: (payload.exam_responses || []).map((response) => ({
+          partId: response.part_id || response.partId || null,
+          questionId: response.question_id || response.questionId || null,
+          responseText: response.response_text || response.responseText || null,
+          responseData: response.response_data || response.responseData || null,
+          wordCount: Number(response.word_count || response.wordCount || 0) || 0,
+          durationSeconds: Number(response.duration_seconds || response.durationSeconds || 0) || 0
+        })),
+        rendererKind: quiz.renderer?.kind || null,
+        timeTakenSeconds: Number(payload.time_taken_seconds || 0) || 0,
         autoScore: 0,
         awardedMarks: null,
         maxScore: 0,
@@ -656,6 +680,11 @@ const submitContent = async (payload, user, tenant) => {
       submission.reviewedBy = null;
       submission.submittedAt = attempt.submittedAt;
       await submission.save();
+      await markSubmittedContentComplete({
+        instituteId,
+        userId: user._id,
+        content
+      });
       return serializeStudentSubmission(submission);
     }
 
@@ -711,6 +740,11 @@ const submitContent = async (payload, user, tenant) => {
       submission.reviewedBy = null;
       submission.submittedAt = attempt.submittedAt;
       await submission.save();
+      await markSubmittedContentComplete({
+        instituteId,
+        userId: user._id,
+        content
+      });
       return serializeStudentSubmission(submission);
     }
 
@@ -752,6 +786,11 @@ const submitContent = async (payload, user, tenant) => {
     submission.reviewedBy = null;
     submission.submittedAt = attempt.submittedAt;
     await submission.save();
+    await markSubmittedContentComplete({
+      instituteId,
+      userId: user._id,
+      content
+    });
     return serializeStudentSubmission(submission);
   }
 
@@ -794,6 +833,11 @@ const submitContent = async (payload, user, tenant) => {
   submission.reviewedBy = null;
   submission.submittedAt = attempt.submittedAt;
   await submission.save();
+  await markSubmittedContentComplete({
+    instituteId,
+    userId: user._id,
+    content
+  });
 
   return serializeStudentSubmission(submission);
 };

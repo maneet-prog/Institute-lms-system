@@ -1,9 +1,14 @@
 const Module = require("../models/Module");
+const Content = require("../models/Content");
 const UserProgress = require("../models/Progress");
 const { UserBatch, UserModule } = require("../models/Enrollment");
 const AppError = require("../utils/AppError");
 const { serializeProgress } = require("../utils/serializers");
 const { sameId } = require("./accessService");
+const {
+  getVisibleModuleContentsForStudent,
+  markContentCompletedForStudent
+} = require("./progressTrackingService");
 
 const getInstituteId = (user, tenant) => tenant?.instituteId || user?.instituteId || null;
 
@@ -59,11 +64,42 @@ const markComplete = async (payload, user, tenant) => {
     throw new AppError("Module not found for the current user.", 404);
   }
 
+  if (payload.content_id) {
+    const content = await Content.findOne({
+      _id: payload.content_id,
+      moduleId: payload.module_id,
+      instituteId,
+      active: true
+    }).select("_id");
+    if (!content) {
+      throw new AppError("Content not found for the current module.", 404);
+    }
+
+    const visibleContents = await getVisibleModuleContentsForStudent({
+      instituteId,
+      userId: user._id,
+      moduleId: payload.module_id
+    });
+    const canAccessContent = visibleContents.some((item) => sameId(item._id, payload.content_id));
+    if (!canAccessContent) {
+      throw new AppError("Content not found for the current user.", 404);
+    }
+
+    const progress = await markContentCompletedForStudent({
+      instituteId,
+      userId: user._id,
+      moduleId: payload.module_id,
+      contentId: payload.content_id,
+      completed: payload.completed
+    });
+    return serializeProgress(progress);
+  }
+
   const progress = await UserProgress.findOneAndUpdate(
     { userId: user._id, moduleId: payload.module_id, instituteId },
     {
       completed: payload.completed,
-      progressPercent: payload.progress_percent,
+      progressPercent: payload.progress_percent ?? (payload.completed ? 100 : 0),
       lastAccessed: new Date()
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }

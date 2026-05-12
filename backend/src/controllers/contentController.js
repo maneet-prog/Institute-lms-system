@@ -22,6 +22,9 @@ exports.listReusableByModule = asyncHandler(async (req, res) =>
 exports.edit = asyncHandler(async (req, res) =>
   res.json(await service.updateContent(req.params.contentId, req.body, req.file, req.tenant, req.user))
 );
+exports.updateStudentAccess = asyncHandler(async (req, res) =>
+  res.json(await service.updateStudentContentAccess(req.params.contentId, req.body, req.tenant, req.user))
+);
 exports.editReusable = asyncHandler(async (req, res) =>
   res.json(await service.updateReusableContent(req.params.contentId, req.body, req.file, req.tenant, req.user))
 );

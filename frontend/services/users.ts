@@ -1,5 +1,5 @@
 import { api } from "@/services/client";
-import { MessageResponse, User } from "@/types/lms";
+import { MessageResponse, User, UserDetailsResponse } from "@/types/lms";
 
 export async function getUsers(): Promise<User[]> {
   const { data } = await api.get<User[]>("/users");
@@ -94,5 +94,76 @@ export async function updateProfile(payload: {
   new_password?: string;
 }): Promise<User> {
   const { data } = await api.put<User>("/users/me/profile", payload);
+  return data;
+}
+
+export async function getUserDetails(userId: string): Promise<UserDetailsResponse> {
+  const { data } = await api.get<UserDetailsResponse>(`/users/${userId}/details`);
+  return data;
+}
+
+export async function enrollUser(userId: string, payload: {
+  course_id: string;
+  subcourse_id?: string;
+  batch_id?: string;
+}): Promise<any> {
+  const { data } = await api.post(`/users/${userId}/enroll`, payload);
+  return data;
+}
+
+export async function removeUserEnrollment(enrollmentId: string): Promise<MessageResponse> {
+  const { data } = await api.delete(`/users/${enrollmentId}/enroll/${enrollmentId}`);
+  return data;
+}
+
+export async function assignUserToBatch(userId: string, payload: {
+  batch_id: string;
+  role: "student" | "teacher";
+}): Promise<any> {
+  const { data } = await api.post(`/users/${userId}/batches`, payload);
+  return data;
+}
+
+export async function removeUserFromBatch(userId: string, batchAssignmentId: string): Promise<MessageResponse> {
+  const { data } = await api.delete(`/users/${userId}/batches/${batchAssignmentId}`);
+  return data;
+}
+
+export async function createUserContent(userId: string, payload: {
+  title: string;
+  description?: string;
+  content_type: string;
+  content_data: any;
+  module_id: string;
+  batch_id: string;
+  due_date?: string;
+  max_marks?: number;
+}): Promise<any> {
+  const { data } = await api.post(`/users/${userId}/content`, payload);
+  return data;
+}
+
+export async function updateUserContent(userId: string, contentId: string, payload: {
+  title?: string;
+  description?: string;
+  content_data?: any;
+  due_date?: string;
+  max_marks?: number;
+}): Promise<any> {
+  const { data } = await api.put(`/users/${userId}/content/${contentId}`, payload);
+  return data;
+}
+
+export async function deleteUserContent(userId: string, contentId: string): Promise<MessageResponse> {
+  const { data } = await api.delete(`/users/${userId}/content/${contentId}`);
+  return data;
+}
+
+export async function reviewUserSubmission(userId: string, submissionId: string, payload: {
+  marks?: number;
+  feedback?: string;
+  status: "reviewed" | "pending";
+}): Promise<any> {
+  const { data } = await api.put(`/users/${userId}/submissions/${submissionId}/review`, payload);
   return data;
 }

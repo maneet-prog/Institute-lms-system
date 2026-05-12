@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { getAssignableRoles, ROLE_LABELS } from "@/constants/roles";
 import {
@@ -39,6 +40,7 @@ export function UsersTable({
   const assignableRoles = getAssignableRoles(role);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [approvalUser, setApprovalUser] = useState<User | null>(null);
+  const router = useRouter();
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -122,6 +124,12 @@ export function UsersTable({
             header: "Actions",
             render: (user) => (
               <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => router.push(`/dashboard/institute-admin/users/${user.user_id}`)}
+                >
+                  View Details
+                </Button>
                 {!user.is_approved ? (
                   <Button
                     onClick={() => openApproval(user)}

@@ -1,6 +1,8 @@
 const Batch = require("../models/Batch");
 const Content = require("../models/Content");
 const Module = require("../models/Module");
+const User = require("../models/User");
+const UserProgress = require("../models/Progress");
 const StudentSubmission = require("../models/StudentSubmission");
 const { UserBatch } = require("../models/Enrollment");
 const AppError = require("../utils/AppError");
@@ -17,10 +19,14 @@ const { validateQuizDefinition } = require("../utils/quiz");
 const {
   buildTecaiWritingRenderer,
   sanitizeRenderer,
+  TECAI_READING_KIND,
   TECAI_WRITING_KIND,
+  TECAI_LISTENING_KIND,
   DEFAULT_TIMER_SECONDS
 } = require("../utils/tecaiReading");
 const { serializeContent, serializeStudentSubmission } = require("../utils/serializers");
+const { isContentVisibleToStudent } = require("./contentVisibilityService");
+const { recalculateModuleProgress } = require("./progressTrackingService");
 
 const getModuleOrThrow = async (moduleId) => {
   const moduleItem = await Module.findById(moduleId);
@@ -97,6 +103,11 @@ const validateContentState = ({ contentType, description, fileUrl, externalUrl, 
     }
     if (quiz) {
       validateQuizDefinition(quiz);
+      if (quiz.renderer?.kind === TECAI_LISTENING_KIND) {
+        if (!fileUrl || !externalUrl) {
+          throw new AppError("Listening exams require both an uploaded prompt file and an audio link.", 400);
+        }
+      }
     }
   } else if (contentType === "text" && !((description || "").trim() || externalUrl)) {
     throw new AppError("Text content requires a description or an external URL.", 400);
@@ -183,10 +194,6 @@ const parseIdList = (value) => {
 
   return [];
 };
-
-const isContentVisibleToStudent = (content, userId) =>
-  content.visibilityScope !== "selected_students" ||
-  (content.assignedStudentIds || []).some((studentId) => sameId(studentId, userId));
 
 const ensureReusableContentAccess = (currentUser, instituteId) => {
   if (hasRole(currentUser, "super_admin")) return;
@@ -321,6 +328,20 @@ const buildWritingRenderer = ({ instructions, timerSeconds, parts }) => ({
   }))
 });
 
+const buildReadingRenderer = ({ timerSeconds }) => ({
+  kind: TECAI_READING_KIND,
+  timer_seconds: Math.max(0, Number(timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS),
+  paragraphs: []
+});
+
+const buildListeningRenderer = ({ timerSeconds, audioUrl, promptFileUrl, instructions }) => ({
+  kind: TECAI_LISTENING_KIND,
+  timer_seconds: Math.max(0, Number(timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS),
+  audio_url: audioUrl || "",
+  prompt_file_url: promptFileUrl || "",
+  instructions: instructions || ""
+});
+
 const buildExamProfile = ({
   payload,
   moduleItem,
@@ -349,6 +370,21 @@ const resolveExamRenderer = (content) => {
       instructions: content.profile?.instructions || "",
       timerSeconds: content.profile?.exam?.timerSeconds || DEFAULT_TIMER_SECONDS,
       parts: normalizeExamParts(content.profile.exam.parts)
+    });
+  }
+
+  if (content.profile?.exam?.rendererKind === TECAI_READING_KIND) {
+    return buildReadingRenderer({
+      timerSeconds: content.profile?.exam?.timerSeconds || DEFAULT_TIMER_SECONDS
+    });
+  }
+
+  if (content.profile?.exam?.rendererKind === TECAI_LISTENING_KIND) {
+    return buildListeningRenderer({
+      timerSeconds: content.profile?.exam?.timerSeconds || DEFAULT_TIMER_SECONDS,
+      audioUrl: content.externalUrl || "",
+      promptFileUrl: content.fileUrl || "",
+      instructions: content.profile?.instructions || ""
     });
   }
 
@@ -432,7 +468,13 @@ const createContent = async (payload, file, tenant, user) => {
     const category = inferModuleCategory(moduleItem);
     const rendererKind =
       payload.renderer_kind ||
-      (category === "writing" ? TECAI_WRITING_KIND : category === "reading" ? "tecai_reading" : "custom");
+      (category === "writing"
+        ? TECAI_WRITING_KIND
+        : category === "reading"
+          ? TECAI_READING_KIND
+          : category === "listening"
+            ? TECAI_LISTENING_KIND
+            : "custom");
     const timerSeconds =
       Math.max(0, Number(payload.timer_seconds || 0) || 0) ||
       Math.max(0, Number(payload.duration || 0) * 60 || 0) ||
@@ -456,6 +498,33 @@ const createContent = async (payload, file, tenant, user) => {
             })
           };
         }
+      } else if (
+        !quiz &&
+        (rendererKind === TECAI_READING_KIND ||
+          rendererKind === TECAI_WRITING_KIND ||
+          rendererKind === TECAI_LISTENING_KIND)
+      ) {
+        quiz = {
+          mode: "written",
+          attemptLimit: Math.max(1, Number(payload.attempt_limit || 999) || 999),
+          questions: [],
+          renderer:
+            rendererKind === TECAI_READING_KIND
+              ? buildReadingRenderer({ timerSeconds })
+              : rendererKind === TECAI_LISTENING_KIND
+                ? buildListeningRenderer({
+                    timerSeconds,
+                    audioUrl: payload.external_url || "",
+                    promptFileUrl: upload?.fileUrl || "",
+                    instructions: payload.instructions || ""
+                  })
+                : {
+                    kind: TECAI_WRITING_KIND,
+                    timer_seconds:
+                      Math.max(0, Number(timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS),
+                    blocks: []
+                  }
+        };
       }
       if (quiz && payload.attempt_limit !== undefined) {
         quiz.attemptLimit = Math.max(0, Number(payload.attempt_limit) || 0);
@@ -586,7 +655,13 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
   const nextRendererKind =
     payload.renderer_kind ||
     content.profile?.exam?.rendererKind ||
-    (nextCategory === "writing" ? TECAI_WRITING_KIND : nextCategory === "reading" ? "tecai_reading" : "custom");
+    (nextCategory === "writing"
+      ? TECAI_WRITING_KIND
+      : nextCategory === "reading"
+        ? TECAI_READING_KIND
+        : nextCategory === "listening"
+          ? TECAI_LISTENING_KIND
+          : "custom");
   const nextTimerSeconds =
     Math.max(0, Number(payload.timer_seconds || 0) || 0) ||
     Math.max(0, Number(payload.duration ?? content.duration ?? 0) * 60 || 0) ||
@@ -596,7 +671,7 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
   const parsedExamParts = normalizeExamParts(
     parseOptionalJson(payload.exam_parts, "exam_parts") ?? content.profile?.exam?.parts ?? []
   );
-  const nextQuiz =
+  let nextQuiz =
     nextType === "quiz" && !file
       ? (nextRendererKind === TECAI_WRITING_KIND || nextCategory === "writing")
         ? parsedExamParts.length
@@ -614,6 +689,38 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
           : content.profile?.quiz || null
         : content.profile?.quiz || null
       : content.profile?.quiz || null;
+
+  if (
+    !nextQuiz &&
+    nextType === "quiz" &&
+    (nextRendererKind === TECAI_READING_KIND ||
+      nextRendererKind === TECAI_WRITING_KIND ||
+      nextRendererKind === TECAI_LISTENING_KIND) &&
+    (file || content.fileUrl || (nextRendererKind === TECAI_LISTENING_KIND && nextExternalUrl))
+  ) {
+    nextQuiz = {
+      mode: "written",
+      attemptLimit: Math.max(1, Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 999) || 999),
+      questions: [],
+      renderer:
+        nextRendererKind === TECAI_READING_KIND
+          ? buildReadingRenderer({ timerSeconds: nextTimerSeconds })
+          : nextRendererKind === TECAI_LISTENING_KIND
+            ? buildListeningRenderer({
+                timerSeconds: nextTimerSeconds,
+                audioUrl: nextExternalUrl || "",
+                promptFileUrl: nextFileUrl || "",
+                instructions:
+                  payload.instructions !== undefined ? payload.instructions || "" : content.profile?.instructions || ""
+              })
+            : {
+                kind: TECAI_WRITING_KIND,
+                timer_seconds:
+                  Math.max(0, Number(nextTimerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS),
+                blocks: []
+              }
+    };
+  }
 
   if (
     nextType === "quiz" &&
@@ -712,6 +819,82 @@ const deleteContent = async (id, tenant, currentUser) => {
   await deleteStorageKeyIfUnused(content.storageKey, content._id);
 };
 
+const updateStudentContentAccess = async (contentId, payload, tenant, currentUser) => {
+  const content = await Content.findById(contentId);
+  if (!content || content.isReusableTemplate || !content.active) {
+    throw new AppError("Content not found.", 404);
+  }
+  if (!hasRole(currentUser, "super_admin") && !sameId(content.instituteId, tenant.instituteId)) {
+    throw new AppError("Content not found.", 404);
+  }
+
+  const moduleItem = await getModuleOrThrow(content.moduleId);
+  const batch = await getBatchOrThrow(content.batchId);
+  assertBatchModuleLink(batch, moduleItem);
+  await assertBatchAccess({
+    currentUser,
+    instituteId: asId(content.instituteId),
+    batch,
+    forWrite: true
+  });
+
+  const student = await User.findOne({
+    _id: payload.student_id,
+    instituteId: content.instituteId,
+    active: true,
+    roles: "student"
+  }).select("_id");
+  if (!student) {
+    throw new AppError("Student not found.", 404);
+  }
+
+  const batchAssignment = await UserBatch.findOne({
+    instituteId: content.instituteId,
+    batchId: batch._id,
+    userId: student._id,
+    active: true
+  }).select("_id");
+  if (!batchAssignment) {
+    throw new AppError("Student must belong to this batch.", 400);
+  }
+
+  const studentId = asId(student._id);
+  const assignedStudentIds = new Set((content.assignedStudentIds || []).map(asId).filter(Boolean));
+  const hiddenStudentIds = new Set((content.hiddenStudentIds || []).map(asId).filter(Boolean));
+
+  if (content.visibilityScope === "selected_students") {
+    if (payload.access_mode === "grant") {
+      assignedStudentIds.add(studentId);
+    } else {
+      assignedStudentIds.delete(studentId);
+    }
+  } else if (payload.access_mode === "grant") {
+    hiddenStudentIds.delete(studentId);
+  } else {
+    hiddenStudentIds.add(studentId);
+  }
+
+  content.assignedStudentIds = [...assignedStudentIds];
+  content.hiddenStudentIds = [...hiddenStudentIds];
+  await content.save();
+
+  const existingProgress = await UserProgress.findOne({
+    instituteId: content.instituteId,
+    userId: student._id,
+    moduleId: content.moduleId
+  }).lean();
+
+  await recalculateModuleProgress({
+    instituteId: asId(content.instituteId),
+    userId: studentId,
+    moduleId: asId(content.moduleId),
+    completedContentIds: existingProgress?.completedContentIds || [],
+    lastAccessed: existingProgress?.lastAccessed || new Date()
+  });
+
+  return serializeContent(content, { includeQuizAnswers: true });
+};
+
 const createReusableContent = async (payload, file, tenant, user) => {
   const instituteId = await resolveInstituteScope({
     requestedInstituteId: payload.institute_id,
@@ -734,7 +917,13 @@ const createReusableContent = async (payload, file, tenant, user) => {
     const category = inferModuleCategory(moduleItem);
     const rendererKind =
       payload.renderer_kind ||
-      (category === "writing" ? TECAI_WRITING_KIND : category === "reading" ? "tecai_reading" : "custom");
+      (category === "writing"
+        ? TECAI_WRITING_KIND
+        : category === "reading"
+          ? TECAI_READING_KIND
+          : category === "listening"
+            ? TECAI_LISTENING_KIND
+            : "custom");
     const timerSeconds =
       Math.max(0, Number(payload.timer_seconds || 0) || 0) ||
       Math.max(0, Number(payload.duration || 0) * 60 || 0) ||
@@ -758,6 +947,33 @@ const createReusableContent = async (payload, file, tenant, user) => {
             })
           };
         }
+      } else if (
+        !quiz &&
+        (rendererKind === TECAI_READING_KIND ||
+          rendererKind === TECAI_WRITING_KIND ||
+          rendererKind === TECAI_LISTENING_KIND)
+      ) {
+        quiz = {
+          mode: "written",
+          attemptLimit: Math.max(1, Number(payload.attempt_limit || 999) || 999),
+          questions: [],
+          renderer:
+            rendererKind === TECAI_READING_KIND
+              ? buildReadingRenderer({ timerSeconds })
+              : rendererKind === TECAI_LISTENING_KIND
+                ? buildListeningRenderer({
+                    timerSeconds,
+                    audioUrl: payload.external_url || "",
+                    promptFileUrl: upload?.fileUrl || "",
+                    instructions: payload.instructions || ""
+                  })
+                : {
+                    kind: TECAI_WRITING_KIND,
+                    timer_seconds:
+                      Math.max(0, Number(timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS),
+                    blocks: []
+                  }
+        };
       }
       if (quiz && payload.attempt_limit !== undefined) {
         quiz.attemptLimit = Math.max(0, Number(payload.attempt_limit) || 0);
@@ -867,7 +1083,13 @@ const updateReusableContent = async (id, payload, file, tenant, currentUser) => 
   const nextRendererKind =
     payload.renderer_kind ||
     content.profile?.exam?.rendererKind ||
-    (nextCategory === "writing" ? TECAI_WRITING_KIND : nextCategory === "reading" ? "tecai_reading" : "custom");
+    (nextCategory === "writing"
+      ? TECAI_WRITING_KIND
+      : nextCategory === "reading"
+        ? TECAI_READING_KIND
+        : nextCategory === "listening"
+          ? TECAI_LISTENING_KIND
+          : "custom");
   const nextTimerSeconds =
     Math.max(0, Number(payload.timer_seconds || 0) || 0) ||
     Math.max(0, Number(payload.duration ?? content.duration ?? 0) * 60 || 0) ||
@@ -901,6 +1123,38 @@ const updateReusableContent = async (id, payload, file, tenant, currentUser) => 
         nextQuiz = content.profile?.quiz || null;
       }
     }
+  }
+
+  if (
+    !nextQuiz &&
+    nextType === "quiz" &&
+    (nextRendererKind === TECAI_READING_KIND ||
+      nextRendererKind === TECAI_WRITING_KIND ||
+      nextRendererKind === TECAI_LISTENING_KIND) &&
+    (file || content.fileUrl || (nextRendererKind === TECAI_LISTENING_KIND && nextExternalUrl))
+  ) {
+    nextQuiz = {
+      mode: "written",
+      attemptLimit: Math.max(1, Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 999) || 999),
+      questions: [],
+      renderer:
+        nextRendererKind === TECAI_READING_KIND
+          ? buildReadingRenderer({ timerSeconds: nextTimerSeconds })
+          : nextRendererKind === TECAI_LISTENING_KIND
+            ? buildListeningRenderer({
+                timerSeconds: nextTimerSeconds,
+                audioUrl: nextExternalUrl || "",
+                promptFileUrl: nextFileUrl || "",
+                instructions:
+                  payload.instructions !== undefined ? payload.instructions || "" : content.profile?.instructions || ""
+              })
+            : {
+                kind: TECAI_WRITING_KIND,
+                timer_seconds:
+                  Math.max(0, Number(nextTimerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS),
+                blocks: []
+              }
+    };
   }
 
   if (
@@ -1060,6 +1314,7 @@ module.exports = {
   updateContent,
   updateReusableContent,
   assignReusableContent,
+  updateStudentContentAccess,
   deleteContent,
   deleteReusableContent
 };

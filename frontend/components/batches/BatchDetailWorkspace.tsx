@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { ModuleCatalogTable } from "@/components/content/ModuleCatalogTable";
+import { StudentContentAccessModal } from "@/components/batches/StudentContentAccessModal";
 import { CourseManagementForms } from "@/components/forms/CourseManagementForms";
 import { ModuleContentList } from "@/components/content/ModuleContentList";
 import { DataTable } from "@/components/tables/DataTable";
@@ -20,6 +21,7 @@ import {
   useUsersByInstituteQuery
 } from "@/hooks/useLmsQueries";
 import { useAuthStore } from "@/store/auth";
+import { User } from "@/types/lms";
 
 interface Props {
   batchId: string;
@@ -40,6 +42,7 @@ export function BatchDetailWorkspace({ batchId, instituteId, badge }: Props) {
   const [activePanel, setActivePanel] = useState<BatchActionPanel>(null);
   const [teacherUserId, setTeacherUserId] = useState("");
   const [studentIds, setStudentIds] = useState<string[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
 
   const assignTeacher = useAssignTeacherMutation();
   const assignStudent = useAssignStudentBatchMutation();
@@ -354,19 +357,25 @@ export function BatchDetailWorkspace({ batchId, instituteId, badge }: Props) {
                       key: "actions",
                       header: "Actions",
                       render: (row) => (
-                        <Button
-                          variant="danger"
-                          onClick={() =>
-                            removeStudent.mutate({
-                              batch_id: data.batch_id,
-                              user_id: row.user_id,
-                              institute_id: effectiveInstituteId
-                            })
-                          }
-                          disabled={removeStudent.isPending}
-                        >
-                          Remove
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" variant="secondary" onClick={() => setSelectedStudent(row)}>
+                            Manage Access
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="danger"
+                            onClick={() =>
+                              removeStudent.mutate({
+                                batch_id: data.batch_id,
+                                user_id: row.user_id,
+                                institute_id: effectiveInstituteId
+                              })
+                            }
+                            disabled={removeStudent.isPending}
+                          >
+                            Remove
+                          </Button>
+                        </div>
                       )
                     }
                   : { key: "actions", header: "Actions", render: () => "-" }
@@ -375,6 +384,15 @@ export function BatchDetailWorkspace({ batchId, instituteId, badge }: Props) {
           </div>
         </Card>
       </div>
+
+      <StudentContentAccessModal
+        open={Boolean(selectedStudent)}
+        onClose={() => setSelectedStudent(null)}
+        batchId={data.batch_id}
+        instituteId={effectiveInstituteId}
+        student={selectedStudent}
+        modules={modules}
+      />
     </div>
   );
 }

@@ -145,7 +145,15 @@ export interface TecaiWritingRenderer {
   }>;
 }
 
-export type TecaiQuizRenderer = TecaiReadingRenderer | TecaiWritingRenderer;
+export interface TecaiListeningRenderer {
+  kind: "tecai_listening";
+  timer_seconds: number;
+  audio_url: string;
+  prompt_file_url: string;
+  instructions?: string;
+}
+
+export type TecaiQuizRenderer = TecaiReadingRenderer | TecaiWritingRenderer | TecaiListeningRenderer;
 
 export interface Content {
   content_id: string;
@@ -168,6 +176,8 @@ export interface Content {
   response_type?: string | null;
   visibility_scope?: "batch" | "selected_students";
   assigned_student_ids?: string[];
+  hidden_student_ids?: string[];
+  completed?: boolean;
   exam?: {
     exam_type_id?: string | null;
     module_id?: string | null;
@@ -468,7 +478,116 @@ export interface UserProgress {
   module_id: string;
   completed: boolean;
   progress_percent: number;
+  completed_content_ids: string[];
+  total_content_count: number;
+  completed_content_count: number;
   last_accessed: string;
+}
+
+export interface UserDetailsResponse {
+  user: User;
+  courses: {
+    enrolled: Array<{
+      id: string;
+      course_id: string;
+      course_name: string;
+      subcourse_id: string;
+      subcourse_name: string;
+      enrolled_at: string;
+    }>;
+    selected: Array<{
+      course_id: string;
+      course_name: string;
+      subcourse_id: string;
+      subcourse_name: string;
+    }>;
+  };
+  batches: {
+    assigned: Array<{
+      id: string;
+      batch_id: string;
+      batch_name: string;
+      course_id: string;
+      course_name: string;
+      subcourse_id: string;
+      subcourse_name: string;
+      assigned_at: string;
+    }>;
+    teaching: Array<{
+      id: string;
+      batch_id: string;
+      batch_name: string;
+      course_id: string;
+      course_name: string;
+      subcourse_id: string;
+      subcourse_name: string;
+      assigned_at: string;
+    }>;
+  };
+  modules: Array<{
+    id: string;
+    module_id: string;
+    module_name: string;
+    exam_type: "reading" | "writing" | "listening" | "speaking" | "general";
+    course_id: string;
+    course_name: string;
+    subcourse_id: string;
+    subcourse_name: string;
+    enrolled_at: string;
+  }>;
+  progress: Array<{
+    id: string;
+    module_id: string;
+    module_name: string;
+    completed: boolean;
+    progress_percent: number;
+    last_accessed: string;
+    course_id: string;
+    course_name: string;
+    subcourse_id: string;
+    subcourse_name: string;
+  }>;
+  content: Array<{
+    id: string;
+    title: string;
+    type: string;
+    description: string;
+    file_url: string | null;
+    external_url: string | null;
+    order_index: number;
+    duration: number;
+    visibility_scope: string;
+    created_at: string;
+    module_id: string;
+    module_name: string;
+    batch_id: string | null;
+    batch_name: string | null;
+    created_by: string | null;
+  }>;
+  submissions: Array<{
+    id: string;
+    module_id: string;
+    module_name: string;
+    exam_id: string | null;
+    status: string;
+    attempts_count: number;
+    latest_attempt: {
+      attempt_number: number;
+      submitted_at: string;
+      auto_score: number;
+      awarded_marks: number | null;
+      max_score: number;
+      status: string;
+      feedback: string | null;
+      reviewed_at: string | null;
+      reviewed_by: string | null;
+    } | null;
+    course_id: string;
+    course_name: string;
+    subcourse_id: string;
+    subcourse_name: string;
+    created_at: string;
+  }>;
 }
 
 export interface MessageResponse {

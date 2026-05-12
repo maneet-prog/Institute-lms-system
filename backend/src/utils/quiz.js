@@ -1,5 +1,6 @@
 const AppError = require("./AppError");
 
+const DEFAULT_TIMER_SECONDS = 3600;
 const ensureArray = (value) => (Array.isArray(value) ? value : []);
 const isTecaiRenderer = (renderer) =>
   (renderer?.kind === "tecai_reading" && Array.isArray(renderer.paragraphs)) ||
@@ -82,6 +83,19 @@ const resolveQuizFromContent = (content) => {
   const structuredQuiz = normalizeQuizPayload(content?.profile?.quiz || null);
   if (structuredQuiz) {
     return structuredQuiz;
+  }
+
+  if (content?.profile?.exam?.rendererKind === "tecai_reading" || content?.profile?.exam?.rendererKind === "tecai_writing") {
+    const rendererKind = content.profile.exam.rendererKind;
+    return {
+      mode: "written",
+      attemptLimit: Math.max(1, Number(content?.profile?.quiz?.attemptLimit || 999) || 999),
+      questions: [],
+      renderer:
+        rendererKind === "tecai_reading"
+          ? { kind: "tecai_reading", timer_seconds: Number(content.profile.exam.timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS, paragraphs: [] }
+          : { kind: "tecai_writing", timer_seconds: Number(content.profile.exam.timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS, blocks: [] }
+    };
   }
 
   if (!content?.description) {

@@ -7,6 +7,12 @@ const progressSchema = new mongoose.Schema(
     moduleId: { type: mongoose.Schema.Types.ObjectId, ref: "Module", required: true, index: true },
     completed: { type: Boolean, default: false },
     progressPercent: { type: Number, min: 0, max: 100, default: 0 },
+    completedContentIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Content" }],
+      default: []
+    },
+    totalContentCount: { type: Number, min: 0, default: 0 },
+    completedContentCount: { type: Number, min: 0, default: 0 },
     lastAccessed: { type: Date, default: Date.now },
     active: { type: Boolean, default: true }
   },

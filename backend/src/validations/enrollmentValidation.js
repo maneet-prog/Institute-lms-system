@@ -27,8 +27,9 @@ exports.removeAssignmentSchema = Joi.object({
 
 exports.progressSchema = Joi.object({
   module_id: Joi.string().required(),
+  content_id: Joi.string().optional(),
   completed: Joi.boolean().default(true),
-  progress_percent: Joi.number().min(0).max(100).default(100)
+  progress_percent: Joi.number().min(0).max(100).optional()
 });
 
 exports.studentSubmissionSchema = Joi.object({

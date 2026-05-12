@@ -1,16 +1,14 @@
 "use client";
 
-import { ChangeEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 
 import { AppLink } from "@/components/navigation/AppLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ContentRenderer } from "@/components/content/ContentRenderer";
-import {
-  useStudentBatchWorkspaceQuery,
-  useSubmitStudentContentMutation
-} from "@/hooks/useLmsQueries";
+import { StudentContentSubmissionPanel } from "@/components/content/StudentContentSubmissionPanel";
+import { useStudentBatchWorkspaceQuery } from "@/hooks/useLmsQueries";
 
 function formatScore(value: number | null | undefined, maxScore: number) {
   return maxScore > 0 ? `${value ?? 0}/${maxScore}` : String(value ?? 0);
@@ -19,31 +17,9 @@ function formatScore(value: number | null | undefined, maxScore: number) {
 export default function StudentCourseWorkspacePage() {
   const params = useParams<{ courseId: string }>();
   const [selectedCategory, setSelectedCategory] = useState<string | undefined>(undefined);
-  const [drafts, setDrafts] = useState<Record<string, { response_text?: string; response_url?: string }>>({});
   const { data, isLoading } = useStudentBatchWorkspaceQuery(params.courseId, selectedCategory);
-  const submitResponse = useSubmitStudentContentMutation();
-  const buildCourseExamHref = (moduleId: string, contentId: string) =>
-    `/course/${data?.course_id}/${data?.subcourse_id}/${moduleId}?batch_id=${data?.batch_id}&content_id=${contentId}&autostart=1`;
 
   const categories = useMemo(() => data?.content_categories ?? [], [data]);
-
-  const onFileSelect = (contentId: string, event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setDrafts((prev) => ({
-        ...prev,
-        [contentId]: {
-          ...prev[contentId],
-          response_url: String(reader.result)
-        }
-      }));
-    };
-    reader.readAsDataURL(file);
-  };
 
   if (isLoading) {
     return <p className="text-sm text-slate-600">Loading course workspace...</p>;
@@ -138,60 +114,9 @@ export default function StudentCourseWorkspacePage() {
                 <div className="mt-4">
                   <ContentRenderer content={item} />
                 </div>
-
-                {item.category === "writing" && !isDynamicExam ? (
-                  <div className="mt-4 space-y-3">
-                    <textarea
-                      className="min-h-32 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
-                      placeholder="Write your response here"
-                      value={drafts[item.content_id]?.response_text ?? item.submission?.response_text ?? ""}
-                      onChange={(event) =>
-                        setDrafts((prev) => ({
-                          ...prev,
-                          [item.content_id]: {
-                            ...prev[item.content_id],
-                            response_text: event.target.value
-                          }
-                        }))
-                      }
-                    />
-                    <Button
-                      onClick={() =>
-                        submitResponse.mutate({
-                          content_id: item.content_id,
-                          response_type: item.response_type || "text",
-                          response_text: drafts[item.content_id]?.response_text ?? ""
-                        })
-                      }
-                    >
-                      Submit Writing
-                    </Button>
-                  </div>
-                ) : null}
-
-                {item.category === "speaking" ? (
-                  <div className="mt-4 space-y-3">
-                    <input
-                      type="file"
-                      accept={item.response_type === "video" ? "video/*" : "audio/*,video/*"}
-                      onChange={(event) => onFileSelect(item.content_id, event)}
-                    />
-                    {drafts[item.content_id]?.response_url || item.submission?.response_url ? (
-                      <p className="text-sm text-slate-600">Media selected and ready to submit.</p>
-                    ) : null}
-                    <Button
-                      onClick={() =>
-                        submitResponse.mutate({
-                          content_id: item.content_id,
-                          response_type: item.response_type || "audio",
-                          response_url: drafts[item.content_id]?.response_url ?? item.submission?.response_url ?? ""
-                        })
-                      }
-                    >
-                      Submit Speaking Response
-                    </Button>
-                  </div>
-                ) : null}
+                <div className="mt-4">
+                  <StudentContentSubmissionPanel content={item} />
+                </div>
 
                 {item.submission ? (
                   <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">

@@ -3,8 +3,8 @@
 import { useMemo } from "react";
 import { useParams } from "next/navigation";
 
-import { AppLink } from "@/components/navigation/AppLink";
 import { ContentRenderer } from "@/components/content/ContentRenderer";
+import { StudentContentSubmissionPanel } from "@/components/content/StudentContentSubmissionPanel";
 import { Card } from "@/components/ui/Card";
 import { useStudentBatchWorkspaceQuery } from "@/hooks/useLmsQueries";
 
@@ -20,8 +20,6 @@ export default function StudentModuleDetailPage() {
     () => data?.modules.find((entry) => entry.module_id === params.moduleId) ?? null,
     [data, params.moduleId]
   );
-  const buildCourseExamHref = (contentId: string) =>
-    `/course/${data?.course_id}/${data?.subcourse_id}/${params.moduleId}?batch_id=${params.batchId}&content_id=${contentId}&autostart=1`;
 
   if (isLoading) {
     return <p className="text-sm text-slate-600">Loading module details...</p>;
@@ -69,7 +67,7 @@ export default function StudentModuleDetailPage() {
                     </AppLink>
                   ) : null} */}
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                    {item.submission ? "Submitted" : "Open Content"}
+                    {item.completed ? "Completed" : item.submission ? "Submitted" : "Open Content"}
                   </span>
                 </div>
               </div>
@@ -81,6 +79,7 @@ export default function StudentModuleDetailPage() {
             <div className="mt-4 space-y-4">
               {item.instructions ? <p className="text-sm text-slate-600">{item.instructions}</p> : null}
               <ContentRenderer content={item} />
+              <StudentContentSubmissionPanel content={item} />
               {item.submission ? (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
                   <p className="font-semibold">Latest submission status: {item.submission.review_status}</p>

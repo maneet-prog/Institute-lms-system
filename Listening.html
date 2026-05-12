@@ -7,6 +7,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
 
     <style>
         * {
@@ -18,11 +19,9 @@
             font-family: "Segoe UI", Arial;
             height: 100vh;
             overflow: hidden;
-            /* ❌ NO PAGE SCROLL */
             background: #f5f7fb;
         }
 
-        /* HEADER */
         header {
             position: fixed;
             top: 0;
@@ -32,20 +31,11 @@
             color: white;
             padding: 10px 20px;
             z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        header h2 {
-            margin: 0;
-            font-size: 18px;
-        }
-
-        header h4 {
-            margin: 2px 0 0;
-            font-size: 13px;
-            opacity: 0.8;
-        }
-
-        /* CONTROLS */
         .controls {
             position: fixed;
             top: 60px;
@@ -54,8 +44,8 @@
             background: white;
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 0 15px;
+            gap: 15px;
+            padding: 0 20px;
             border-bottom: 1px solid #ddd;
             z-index: 999;
         }
@@ -64,90 +54,80 @@
             background: #0b1f3a;
             color: white;
             border: none;
-            padding: 6px 12px;
+            padding: 8px 16px;
             border-radius: 6px;
             cursor: pointer;
+            font-weight: 600;
         }
 
         button:hover {
             background: #163d6b;
         }
 
-        input[type="file"] {
-            padding: 4px;
-        }
-
         .timer {
             margin-left: auto;
             font-weight: bold;
             color: #e63946;
+            font-size: 1.2em;
         }
 
-        /* MAIN CONTENT AREA */
         .container {
             position: fixed;
             top: 115px;
-            /* header + controls */
             bottom: 60px;
-            /* nav height */
             width: 100%;
             display: flex;
+            justify-content: center;
+            overflow: hidden;
         }
 
-        .left,
-        .right {
-            width: 50%;
-            padding: 15px;
+        .main-content {
+            width: 100%;
+            max-width: 900px;
+            background: white;
+            padding: 40px;
             overflow-y: auto;
-            /* ✅ INTERNAL SCROLL ONLY */
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.05);
         }
 
-        .left {
-            background: white;
-            border-right: 1px solid #ddd;
+        .main-content div[id^="q"] {
+            background: #fff;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            border: 1px solid #eee;
+            transition: border 0.3s;
         }
 
-        .right {
-            background: #fafbff;
-        }
-
-        /* QUESTIONS */
-        .right div[id^="q"] {
-            background: white;
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 6px;
-            border: 1px solid #e0e0e0;
-        }
-
-        /* DRAG */
         .drag-container {
             border: 2px dashed #bbb;
             padding: 10px;
             margin: 10px 0;
-            min-height: 40px;
+            min-height: 50px;
             border-radius: 6px;
+            background: #fafafa;
         }
 
         .draggable {
             display: inline-block;
-            padding: 5px 10px;
+            padding: 6px 12px;
             margin: 5px;
             background: #0b1f3a;
             color: white;
-            border-radius: 5px;
+            border-radius: 4px;
             cursor: grab;
         }
 
         .dropzone {
             display: inline-block;
-            min-width: 120px;
-            min-height: 25px;
-            border-bottom: 2px solid #000;
+            min-width: 130px;
+            min-height: 28px;
+            border-bottom: 2px solid #0b1f3a;
             margin: 0 5px;
+            vertical-align: middle;
+            background: #f0f4f8;
         }
 
-        /* NAVIGATION */
         .question-nav {
             position: fixed;
             bottom: 0;
@@ -178,16 +158,13 @@
             color: white;
         }
 
-        input[type="checkbox"]:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        h2,
+        h4 {
+            margin: 0;
         }
 
-        .type-8-group {
-            padding: 10px;
-            background: #f0f4f8;
-            border-radius: 5px;
-            margin-bottom: 15px;
+        #hiddenAudio {
+            display: none;
         }
     </style>
 </head>
@@ -195,23 +172,36 @@
 <body>
 
     <header>
-        <h2>Tajinder's English Classes</h2>
-        <h4>Reading Module</h4>
+        <div>
+            <h2>Tajinder's English Classes</h2>
+            <h4>Listening Module</h4>
+        </div>
     </header>
 
     <div class="controls">
-        <button onclick="setName()">Add Student Name</button>
-        <input type="file" id="fileInput">
-        <button onclick="startTest()">Start</button>
+        <button onclick="setName()">Student Name</button>
+        <input type="file" id="fileInput" accept=".docx">
+        <input type="file" id="audioInput" accept="audio/*" placeholder="Optional Audio">
+
+        <input type="text" id="ytLinkInput" placeholder="Paste YouTube Link here..."
+            style="padding: 8px; width: 200px; border: 1px solid #ccc; border-radius: 4px;">
+        <button onclick="startTest()" style="background: #27ae60;">Start Exam</button>
         <button onclick="submitTest()">Submit</button>
-        <span class="timer" id="timer">60:00</span>
+        <span class="timer" id="timer">00:00</span>
     </div>
 
+    <audio id="hiddenAudio"></audio>
+
     <div class="container">
-        <div class="left" id="leftPanel">
+        <div class="main-content" id="mainPanel">
+            <div style="text-align: center; color: #888; margin-top: 100px;">
+                <h3>Upload DOCX and Audio files to begin the listening test.</h3>
+            </div>
         </div>
-        <div class="right" id="rightPanel">
-        </div>
+    </div>
+
+    <div id="yt-player-container" style="position: absolute; top: -9999px; left: -9999px;">
+        <div id="youtube-player"></div>
     </div>
 
     <div class="question-nav" id="nav"></div>
@@ -232,34 +222,109 @@
 
         async function startTest() {
             const file = document.getElementById("fileInput").files[0];
-            if (!file) return alert("Upload DOCX");
+            const audioFile = document.getElementById("audioInput").files[0];
+            const ytLink = document.getElementById("ytLinkInput").value.trim();
+
+            // Require a DOCX, but allow either Local Audio OR YouTube Link
+            if (!file) return alert("Please upload a DOCX file.");
+            if (!audioFile && !ytLink) return alert("Please upload an Audio file or paste a YouTube link.");
+
+            // Handle Local Audio if present
+            const audio = document.getElementById("hiddenAudio");
+            if (audioFile) {
+                audio.src = URL.createObjectURL(audioFile);
+                audio.play().catch(() => console.log("Audio play blocked"));
+                startTimer(audio);
+            }
+
+            // Handle YouTube Audio if link is provided
+            else if (ytLink) {
+                playYouTube(ytLink);
+            }
 
             const zip = await JSZip.loadAsync(await file.arrayBuffer());
             const xml = await zip.file("word/document.xml").async("string");
 
             const content = await parseDocument(xml, zip);
-
             process(content);
-            startTimer();
         }
 
-        function startTimer() {
+        let ytPlayer;
+        let isYTReady = false;
+
+        // This function is automatically called by the YouTube API when it's loaded
+        function onYouTubeIframeAPIReady() {
+            isYTReady = true;
+        }
+
+        // Function to extract Video ID from a YouTube link
+        function getYTVideoId(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        // Function to play YouTube audio
+        function playYouTube(url) {
+            const videoId = getYTVideoId(url);
+            if (!videoId) return alert("Invalid YouTube URL");
+
+            if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+                ytPlayer.loadVideoById(videoId);
+                ytPlayer.playVideo();
+            } else {
+                ytPlayer = new YT.Player('youtube-player', {
+                    height: '0',
+                    width: '0',
+                    videoId: videoId,
+                    playerVars: {
+                        'autoplay': 1,
+                        'controls': 0,
+                        'disablekb': 1,
+                        'origin': window.location.origin // Adds your local server as a trusted origin
+                    },
+                    events: {
+                        'onReady': (event) => event.target.playVideo(),
+                        'onError': (e) => console.error("YouTube Player Error", e)
+                    }
+                });
+            }
+        }
+        // Update your existing parseTECAIInline or link detection logic:
+        // When you find a link in your docx processing, use this:
+        function handleMediaLink(url) {
+            if (url.includes("youtube.com") || url.includes("youtu.be")) {
+                // Create a button to play the YouTube link
+                return `<button onclick="playYouTube('${url}')" class="play-btn">▶ Play Audio (YT)</button>`;
+            } else if (url.endsWith(".mp3")) {
+                // Your existing MP3 logic
+                return `<audio src="${url}" controls></audio>`;
+            }
+            return `<a href="${url}" target="_blank">Link</a>`;
+        }
+
+        function startTimer(audio) {
+            clearInterval(timerInterval);
             timerInterval = setInterval(() => {
-                totalSeconds--;
+                let remaining;
+                if (audio && audio.duration) {
+                    remaining = Math.floor(audio.duration - audio.currentTime);
+                } else {
+                    // Default 60-minute countdown if no local audio duration exists
+                    totalSeconds--;
+                    remaining = totalSeconds;
+                }
 
-                let m = Math.floor(totalSeconds / 60);
-                let s = totalSeconds % 60;
+                let m = Math.floor(remaining / 60);
+                let s = Math.floor(remaining % 60);
+                document.getElementById("timer").innerText = `${m}:${s < 10 ? '0' + s : s}`;
 
-                document.getElementById("timer").innerText = `${m}:${s < 10 ? '0' + s : '' + s}`;
-
-                if (totalSeconds <= 0) {
+                if (remaining <= 0) {
                     clearInterval(timerInterval);
                     autoSubmitTest();
-                    alert("Time's up! Your answers have been submitted.");
                 }
             }, 1000);
         }
-
         function getParagraphs(xml) {
             const parser = new DOMParser();
             const doc = parser.parseFromString(xml, "application/xml");
@@ -295,6 +360,7 @@
             const body = doc.getElementsByTagName("w:body")[0].childNodes;
 
             let content = [];
+            let sectionTracker = 0;
 
             for (let node of body) {
 
@@ -424,22 +490,22 @@
             // [TECAI Type 6]
             output = output.replace(/\[TECAI\s*Type\s*6\]/gi, () => {
                 return `<b>${qNum++}.</b>
-        <input name="q${qNum - 1}" style="width:100px;margin:0 5px;">`;
+        <input id="q${qNum - 1}" name="q${qNum - 1}" style="width:100px;margin:0 5px;">`;
             });
 
             // [ input box ]
             output = output.replace(/\[\s*input\s*box\s*\]/gi, () => {
                 return `<b>${qNum++}.</b>
-        <input name="q${qNum - 1}" style="width:100px;margin:0 5px;">`;
+        <input id="q${qNum - 1}" name="q${qNum - 1}" style="width:100px;margin:0 5px;">`;
             });
 
             return output;
         }
 
         function process(content) {
-            let currentSection = 0;
+            currentSection = 0;
             let inBlock = false;
-            let rightHTML = "", leftHTML = "";
+            let panelHTML = "";
             // qNum = 1;
             type4Answers = {};
             renderedSets = new Set();
@@ -479,9 +545,14 @@
             content.forEach(p => {
                 let txt = p.text || "";
 
-                if (txt.match(/\[TECAI\s*START\]/i)) { inBlock = true; currentSection++; return; }
+                if (txt.match(/\[TECAI\s*START\]/i)) {
+                    inBlock = true;
+                    currentSection++;
+                    return;
+                }
                 if (txt.match(/\[TECAI\s*END\]/i)) { inBlock = false; return; }
 
+                // Inside the process(content) function, find the table handling block:
                 if (p.type === "table") {
                     let tempDiv = document.createElement("div");
                     tempDiv.innerHTML = p.html;
@@ -497,11 +568,8 @@
                         // Replace placeholder with actual question HTML
                         ph.outerHTML = `<div id="q${currentQ}"><b>${currentQ}.</b> <span class="dropzone" data-set="${dataset}"></span></div>`;
                     });
-                    if (inBlock) {
-                        rightHTML += tempDiv.innerHTML;
-                    } else {
-                        leftHTML += tempDiv.innerHTML;
-                    }
+
+                    panelHTML += tempDiv.innerHTML;
                     return;
                 }
 
@@ -518,15 +586,15 @@
                         let sectionId = currentSection + "_" + id;
 
                         if (!renderedSets.has(sectionId)) {
-                            rightHTML += `<div><b>Options:</b>
+                            panelHTML += `<div><b>Options:</b>
           <div class="drag-container" data-set="${sectionId}" id="set_${sectionId}">`;
 
                             (type4Answers[sectionId] || []).forEach((it, i) => {
-                                rightHTML += `<div class="draggable" draggable="true"
+                                panelHTML += `<div class="draggable" draggable="true"
             data-set="${sectionId}" id="drag_${sectionId}_${i}">${it}</div>`;
                             });
 
-                            rightHTML += `</div></div>`;
+                            panelHTML += `</div></div>`;
                             renderedSets.add(sectionId);
                         }
                         return;
@@ -535,7 +603,7 @@
                     // TYPE 1 (Radio Buttons)
                     if (txt.match(/\[TECAI\s*Type\s*1\]/i)) {
                         let clean = line.replace(/\[TECAI\s*Type\s*1\]/i, "");
-                        rightHTML += `<div id="q${qNum}">
+                        panelHTML += `<div id="q${qNum}">
         <b>${qNum}.</b> ${clean}<br>
         <label><input type="radio" name="q${qNum}" value="TRUE"> TRUE</label>
         <label><input type="radio" name="q${qNum}" value="FALSE"> FALSE</label>
@@ -548,7 +616,7 @@
                     // TYPE 2
                     if (txt.match(/\[TECAI\s*Type\s*2\]/i)) {
                         let clean = line.replace(/\[TECAI\s*Type\s*2\]/i, "");
-                        rightHTML += `<div id="q${qNum}">
+                        panelHTML += `<div id="q${qNum}">
         <b>${qNum}.</b> ${clean}<br>
         <label><input type="radio" name="q${qNum}" value="YES"> YES</label>
         <label><input type="radio" name="q${qNum}" value="NO"> NO</label>
@@ -571,7 +639,7 @@
                             }
                         });
 
-                        rightHTML += `<div id="q${qNum}"><b>${qNum}.</b> ${out}</div>`;
+                        panelHTML += `<div id="q${qNum}"><b>${qNum}.</b> ${out}</div>`;
                         qNum++;
                         return;
                     }
@@ -581,7 +649,7 @@
                         let mod = line.replace(/\[TECAI\s*TYPE\s*4\s*SET\s*(\d+)\]/gi,
                             (m, id) => `<span class="dropzone" data-set="${currentSection + "_" + id}"></span>`
                         );
-                        rightHTML += `<p id="q${qNum}"><b>${qNum}.</b> ${mod}</p>`;
+                        panelHTML += `<p id="q${qNum}"><b>${qNum}.</b> ${mod}</p>`;
                         qNum++;
                         return;
                     }
@@ -589,7 +657,7 @@
                     //Type 5
                     if (txt.match(/\[TECAI\s*Type\s*5\]/i)) {
                         let clean = txt.replace(/\[TECAI\s*Type\s*5\]/i, "");
-                        rightHTML += `<div id="q${qNum}"><b>${qNum}.</b> ${clean}<br>`;
+                        panelHTML += `<div id="q${qNum}"><b>${qNum}.</b> ${clean}<br>`;
                         return;
                     }
 
@@ -598,10 +666,10 @@
                         let targetQ = qNum;
 
                         opts.forEach(opt => {
-                            rightHTML += `<label><input type="radio" name="q${targetQ}" value="${opt}"> ${opt}</label><br>`;
+                            panelHTML += `<label><input type="radio" name="q${targetQ}" value="${opt}"> ${opt}</label><br>`;
                         });
 
-                        rightHTML += `</div>`;
+                        panelHTML += `</div>`;
                         qNum++;
                         return;
                     }
@@ -611,10 +679,10 @@
                         let targetQ = qNum;
 
                         opts.forEach(opt => {
-                            rightHTML += `<label><input type="checkbox" name="q${targetQ}" value="${opt}"> ${opt}</label><br>`;
+                            panelHTML += `<label><input type="checkbox" name="q${targetQ}" value="${opt}"> ${opt}</label><br>`;
                         });
 
-                        rightHTML += `</div>`;
+                        panelHTML += `</div>`;
                         qNum++;
                         return;
                     }
@@ -642,7 +710,7 @@
                             }
                         });
 
-                        rightHTML += `<div id="q${startQ}">${out}</div>`;
+                        panelHTML += `<div id="q${startQ}">${out}</div>`;
 
                         return;
                     }
@@ -651,7 +719,7 @@
                     // type 7 - dropdown
                     if (txt.match(/\[TECAI\s*TYPE\s*7\]/i) && !txt.match("OPTIONS")) {
                         let clean = txt.replace(/\[TECAI\s*TYPE\s*7\]/i, "").trim();
-                        rightHTML += `<div id="q${qNum}"><b>${qNum}.</b> ${clean}`;
+                        panelHTML += `<div id="q${qNum}"><b>${qNum}.</b> ${clean}`;
                         return;
                     }
 
@@ -670,14 +738,13 @@
                         });
                         selectHTML += `</select></div>`;
 
-                        rightHTML += selectHTML;
+                        panelHTML += selectHTML;
                         qNum++;
                         return;
                     }
 
                     // TYPE 8 (Multi-Select with Range Numbering)
                     if (txt.match(/\[TECAI\s*TYPE\s*8\]/i)) {
-                        // 1. Peek ahead to find the limit in the OPTIONS tag
                         let limit = 2; // Default
                         for (let i = content.indexOf(p); i < content.length; i++) {
                             let peek = content[i].text;
@@ -688,12 +755,10 @@
                             }
                         }
 
-                        // 2. Format the range label (e.g., 41–42)
                         let qRange = (limit > 1) ? `${qNum}–${qNum + limit - 1}` : `${qNum}`;
                         let clean = txt.replace(/\[TECAI\s*TYPE\s*8\]/i, "");
 
-                        // 3. Add 'type-8-group' class and data-limit for the Navigation function to find
-                        rightHTML += `<div id="q${qNum}" class="question-container type-8-group" data-limit="${limit}">
+                        panelHTML += `<div id="q${qNum}" class="question-container type-8-group" data-limit="${limit}">
                     <b>${qRange}.</b> ${clean}<br>`;
                         return;
                     }
@@ -704,28 +769,25 @@
                         let opts = txt.replace(/\[TECAI\s*TYPE\s*8\.\d+\s*OPTIONS\]/i, "").split("/").map(o => o.trim());
 
                         opts.forEach(opt => {
-                            rightHTML += `
+                            panelHTML += `
             <label style="display:block; margin: 5px 0;">
                 <input type="checkbox" name="q${qNum}" value="${opt}" onchange="limitCheckboxes(this, ${limit})"> 
                 ${opt}
             </label>`;
                         });
 
-                        rightHTML += `</div>`;
-                        qNum += limit; // Increment counter by the number of questions covered
+                        panelHTML += `</div>`;
+                        qNum += limit;
                         return;
                     }
 
-                    rightHTML += `<p>${line}</p>`;
+                    panelHTML += `<p>${line}</p>`;
                 }
                 else {
-                    leftHTML += `<p>${p.html}</p>`;
+                    panelHTML += `<p>${p.html}</p>`;
                 }
             });
-
-            document.getElementById("rightPanel").innerHTML = rightHTML;
-            document.getElementById("leftPanel").innerHTML = leftHTML;
-
+            document.getElementById("mainPanel").innerHTML = panelHTML;
             createNav(qNum - 1);
         }
 
@@ -785,7 +847,6 @@
                     let limit = parseInt(container.getAttribute("data-limit") || "1");
                     if (limit > 1) {
                         label = `${i}–${i + limit - 1}`;
-                        // Skip the hidden numbers in the range
                         for (let j = 1; j < limit; j++) {
                             processedQs.add(i + j);
                         }
@@ -807,12 +868,10 @@
 
             checkboxes.forEach(cb => {
                 if (checkedCount >= max) {
-                    // If limit reached, disable all UNCHECKED boxes
                     if (!cb.checked) {
                         cb.disabled = true;
                     }
                 } else {
-                    // If below limit, ensure all boxes are enabled
                     cb.disabled = false;
                 }
             });
@@ -841,7 +900,7 @@ Self Assessment:
             a.click();
         }
 
-        // Collect answers from all question types
+        //collect answers from the form
         function collectAnswers() {
             let data = [];
 

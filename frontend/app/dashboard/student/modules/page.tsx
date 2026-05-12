@@ -1,22 +1,13 @@
 "use client";
 
-import { useState } from "react";
-
 import { AppLink } from "@/components/navigation/AppLink";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ProgressBar } from "@/components/ui/ProgressBar";
-import {
-  useMarkProgressMutation,
-  useProgressQuery,
-  useStudentModulesQuery
-} from "@/hooks/useLmsQueries";
+import { useProgressQuery, useStudentModulesQuery } from "@/hooks/useLmsQueries";
 
 export default function StudentModulesPage() {
   const { data: modules = [], isLoading } = useStudentModulesQuery();
   const { data: progress = [] } = useProgressQuery({ refetchInterval: 15000 });
-  const markProgress = useMarkProgressMutation();
-  const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
 
   const getProgressValue = (moduleId: string) =>
     progress.find((item) => item.module_id === moduleId)?.progress_percent ?? 0;
@@ -56,19 +47,6 @@ export default function StudentModulesPage() {
               >
                 Open Module Details
               </AppLink>
-              <Button
-                onClick={() => {
-                  setActiveModuleId(module.module_id);
-                  markProgress.mutate({
-                    module_id: module.module_id,
-                    completed: true,
-                    progress_percent: 100
-                  });
-                }}
-                disabled={markProgress.isPending && activeModuleId === module.module_id}
-              >
-                Mark Complete
-              </Button>
             </div>
           </Card>
         ))}

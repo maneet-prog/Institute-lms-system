@@ -131,13 +131,15 @@ const serializeContent = (content, options = {}) => ({
   response_type: content.profile?.responseType ?? null,
   visibility_scope: content.visibilityScope ?? "batch",
   assigned_student_ids: (content.assignedStudentIds || []).map(asId).filter(Boolean),
+  hidden_student_ids: (content.hiddenStudentIds || []).map(asId).filter(Boolean),
   exam: serializeExamProfile(content.profile?.exam),
   quiz:
     content.profile?.quiz &&
     (
       Array.isArray(content.profile.quiz.questions) ||
       content.profile.quiz.renderer?.kind === "tecai_reading" ||
-      content.profile.quiz.renderer?.kind === "tecai_writing"
+      content.profile.quiz.renderer?.kind === "tecai_writing" ||
+      content.profile.quiz.renderer?.kind === "tecai_listening"
     )
       ? {
           mode: content.profile.quiz.mode || "mcq",
@@ -264,6 +266,9 @@ const serializeProgress = (progress) => ({
   module_id: asId(progress.moduleId),
   completed: progress.completed,
   progress_percent: progress.progressPercent,
+  completed_content_ids: (progress.completedContentIds || []).map(asId).filter(Boolean),
+  total_content_count: progress.totalContentCount ?? 0,
+  completed_content_count: progress.completedContentCount ?? 0,
   last_accessed: progress.lastAccessed
 });
 

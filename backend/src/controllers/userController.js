@@ -10,6 +10,36 @@ exports.list = asyncHandler(async (req, res) =>
     })
   )
 );
+exports.getUserDetails = asyncHandler(async (req, res) =>
+  res.json(await service.getUserDetails(req.params.userId, req.tenant, req.user))
+);
+exports.enrollUser = asyncHandler(async (req, res) =>
+  res.json(await service.enrollUser(req.params.userId, req.body, req.tenant, req.user))
+);
+exports.removeUserEnrollment = asyncHandler(async (req, res) => {
+  await service.removeUserEnrollment(req.params.enrollmentId, req.tenant, req.user);
+  res.json({ message: "User enrollment removed successfully." });
+});
+exports.assignUserToBatch = asyncHandler(async (req, res) =>
+  res.json(await service.assignUserToBatch(req.params.userId, req.body, req.tenant, req.user))
+);
+exports.removeUserFromBatch = asyncHandler(async (req, res) => {
+  await service.removeUserFromBatch(req.params.batchAssignmentId, req.tenant, req.user);
+  res.json({ message: "User removed from batch successfully." });
+});
+exports.createUserContent = asyncHandler(async (req, res) =>
+  res.status(201).json(await service.createUserContent(req.params.userId, req.body, req.tenant, req.user))
+);
+exports.updateUserContent = asyncHandler(async (req, res) =>
+  res.json(await service.updateUserContent(req.params.contentId, req.body, req.tenant, req.user))
+);
+exports.deleteUserContent = asyncHandler(async (req, res) => {
+  await service.deleteUserContent(req.params.contentId, req.tenant, req.user);
+  res.json({ message: "Content deleted successfully." });
+});
+exports.reviewUserSubmission = asyncHandler(async (req, res) =>
+  res.json(await service.reviewUserSubmission(req.params.submissionId, req.body, req.tenant, req.user))
+);
 exports.create = asyncHandler(async (req, res) =>
   res.status(201).json(await service.createUser(req.body, req.tenant, req.user))
 );

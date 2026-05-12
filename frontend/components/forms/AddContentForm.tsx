@@ -61,6 +61,7 @@ export function AddContentForm({
     attempt_limit: 1,
     visibility_scope: "batch" as "batch" | "selected_students",
     assigned_student_ids: [] as string[],
+    external_url: "",
     file: null as File | null
   });
 
@@ -108,6 +109,8 @@ export function AddContentForm({
   }, [content.module_id, moduleCategory]);
 
   const supportsDocxGenerator = content.category === "reading" || content.category === "writing";
+  const supportsListeningGenerator = content.category === "listening";
+  const supportsExamCreation = supportsDocxGenerator || supportsListeningGenerator;
 
   const quizPreviewContent =
     supportsDocxGenerator && previewUrl
@@ -150,7 +153,13 @@ export function AddContentForm({
     if (supportsDocxGenerator && !content.file) {
       return `Upload a DOCX file to generate the ${content.category} exam.`;
     }
-    if (supportsDocxGenerator && content.attempt_limit < 1) {
+    if (supportsListeningGenerator && !content.external_url.trim()) {
+      return "Provide an audio link for listening exam.";
+    }
+    if (supportsListeningGenerator && !content.file) {
+      return "Upload a listening prompt file.";
+    }
+    if (supportsExamCreation && content.attempt_limit < 1) {
       return "Attempt limit must be at least 1.";
     }
     return null;
@@ -177,7 +186,7 @@ export function AddContentForm({
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (contentValidationMessage || !supportsDocxGenerator) return;
+    if (contentValidationMessage || !supportsExamCreation) return;
 
     const commonPayload = {
       module_id: content.module_id,
@@ -189,7 +198,15 @@ export function AddContentForm({
       duration: content.duration,
       attempt_limit: content.attempt_limit,
       exam_type_id: content.subcourse_id,
-      renderer_kind: content.category === "writing" ? "tecai_writing" : undefined,
+      renderer_kind:
+        content.category === "writing"
+          ? "tecai_writing"
+          : content.category === "reading"
+            ? "tecai_reading"
+            : content.category === "listening"
+              ? "tecai_listening"
+              : undefined,
+      external_url: supportsListeningGenerator ? content.external_url.trim() : undefined,
       file: content.file
     };
 
@@ -200,6 +217,7 @@ export function AddContentForm({
         order_index: 0,
         duration: 60,
         attempt_limit: 1,
+        external_url: "",
         visibility_scope: "batch",
         assigned_student_ids: [],
         file: null
@@ -384,37 +402,60 @@ export function AddContentForm({
         </div>
       ) : null}
 
-      {supportsDocxGenerator ? (
+      {supportsExamCreation ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-slate-900">DOCX {content.category === "writing" ? "Writing" : "Reading"} Exam Generator</p>
+              <p className="text-sm font-semibold text-slate-900">
+                {supportsListeningGenerator
+                  ? "Listening Exam Creator"
+                  : `DOCX ${content.category === "writing" ? "Writing" : "Reading"} Exam Generator`}
+              </p>
               <p className="mt-1 text-sm text-slate-500">
-                Upload the TECAI DOCX template and generate a preview of the rendered {content.category} test before saving.
+                {supportsListeningGenerator
+                  ? "Provide the listening audio link and upload the prompt file before saving."
+                  : `Upload the TECAI DOCX template and generate a preview of the rendered ${content.category} test before saving.`}
               </p>
             </div>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                if (content.file) {
-                  if (previewUrl) URL.revokeObjectURL(previewUrl);
-                  setPreviewUrl(URL.createObjectURL(content.file));
-                }
-              }}
-              disabled={!content.file}
-            >
-              Generate Preview
-            </Button>
+            {!supportsListeningGenerator ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  if (content.file) {
+                    if (previewUrl) URL.revokeObjectURL(previewUrl);
+                    setPreviewUrl(URL.createObjectURL(content.file));
+                  }
+                }}
+                disabled={!content.file}
+              >
+                Generate Preview
+              </Button>
+            ) : null}
           </div>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {supportsListeningGenerator ? (
+              <Input
+                label="Listening Audio Link"
+                value={content.external_url}
+                onChange={(e) => setContent((prev) => ({ ...prev, external_url: e.target.value }))}
+                required
+                disabled={addContent.isPending}
+              />
+            ) : null}
             <div className="space-y-2">
-              <span className="text-sm font-medium text-slate-700">Upload Source (DOCX)</span>
+              <span className="text-sm font-medium text-slate-700">
+                {supportsListeningGenerator ? "Upload Listening Prompt File" : "Upload Source (DOCX)"}
+              </span>
               <input
                 className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
                 type="file"
-                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept={
+                  supportsListeningGenerator
+                    ? ".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                    : ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                }
                 onChange={(e) => {
                   setPreviewUrl(null);
                   setContent((prev) => ({ ...prev, file: e.target.files?.[0] ?? null }));
@@ -468,7 +509,7 @@ export function AddContentForm({
         </div>
       )}
 
-      {supportsDocxGenerator ? (
+      {supportsExamCreation ? (
         <>
           {contentValidationMessage ? <p className="text-sm text-amber-700">{contentValidationMessage}</p> : null}
           <Button

@@ -352,6 +352,18 @@ export async function updateContent(
   return data;
 }
 
+export async function updateStudentContentAccess(
+  contentId: string,
+  payload: {
+    student_id: string;
+    access_mode: "grant" | "revoke";
+    institute_id?: string;
+  }
+): Promise<Content> {
+  const { data } = await api.put<Content>(`/content/${contentId}/student-access`, payload);
+  return data;
+}
+
 export async function updateReusableContent(
   contentId: string,
   payload: {

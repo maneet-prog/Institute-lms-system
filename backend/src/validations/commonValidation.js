@@ -97,6 +97,12 @@ exports.contentUpdateSchema = Joi.object({
   replace_file: Joi.boolean().default(false)
 });
 
+exports.contentStudentAccessSchema = Joi.object({
+  student_id: Joi.string().required(),
+  access_mode: Joi.string().valid("grant", "revoke").required(),
+  institute_id: Joi.string().optional()
+});
+
 exports.reusableContentSchema = Joi.object({
   module_id: Joi.string().required(),
   type: Joi.string().valid("text", "video", "audio", "pdf", "document", "quiz").required(),

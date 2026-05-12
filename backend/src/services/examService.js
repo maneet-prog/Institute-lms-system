@@ -21,6 +21,7 @@ const {
   serializeStudentSubmission
 } = require("../utils/serializers");
 const { sanitizeRenderer, TECAI_WRITING_KIND, DEFAULT_TIMER_SECONDS } = require("../utils/tecaiReading");
+const { isContentVisibleToStudent } = require("./contentVisibilityService");
 
 const ensureArray = (value) => (Array.isArray(value) ? value : []);
 
@@ -69,10 +70,6 @@ const buildWritingRendererFromExam = (content) => {
 
 const getRenderer = (content) =>
   sanitizeRenderer(content?.profile?.quiz?.renderer) || buildWritingRendererFromExam(content);
-const isContentVisibleToStudent = (content, userId) =>
-  content.visibilityScope !== "selected_students" ||
-  (content.assignedStudentIds || []).some((studentId) => String(studentId) === String(userId));
-
 const getCourseOrThrow = async (courseId) => {
   const course = await Course.findById(courseId);
   if (!course) throw new AppError("Course not found.", 404);

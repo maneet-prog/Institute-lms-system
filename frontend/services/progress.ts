@@ -3,8 +3,9 @@ import { UserProgress } from "@/types/lms";
 
 export async function markProgress(payload: {
   module_id: string;
+  content_id?: string;
   completed: boolean;
-  progress_percent: number;
+  progress_percent?: number;
 }): Promise<UserProgress> {
   const { data } = await api.post<UserProgress>("/progress/mark-complete", payload);
   return data;

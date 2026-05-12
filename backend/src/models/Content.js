@@ -110,7 +110,14 @@ const examProfileSchema = new mongoose.Schema(
     moduleLabel: { type: String, default: null },
     rendererKind: {
       type: String,
-      enum: ["tecai_reading", "tecai_writing", "structured_reading", "structured_writing", "custom"],
+      enum: [
+        "tecai_reading",
+        "tecai_writing",
+        "tecai_listening",
+        "structured_reading",
+        "structured_writing",
+        "custom"
+      ],
       default: "custom"
     },
     timerSeconds: { type: Number, min: 0, default: 0 },
@@ -177,6 +184,10 @@ const contentSchema = new mongoose.Schema(
       default: "batch"
     },
     assignedStudentIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      default: []
+    },
+    hiddenStudentIds: {
       type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
       default: []
     },
