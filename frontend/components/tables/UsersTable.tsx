@@ -37,6 +37,8 @@ export function UsersTable({
   const deleteUser = useDeleteUserMutation();
   const { data: institutes = [] } = useInstitutesQuery();
   const role = useAuthStore((state) => state.role);
+  const userDetailsBase =
+    role === "super_admin" ? "/dashboard/admin/users" : "/dashboard/institute-admin/users";
   const assignableRoles = getAssignableRoles(role);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [approvalUser, setApprovalUser] = useState<User | null>(null);
@@ -126,7 +128,7 @@ export function UsersTable({
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="secondary"
-                  onClick={() => router.push(`/dashboard/institute-admin/users/${user.user_id}`)}
+                  onClick={() => router.push(`${userDetailsBase}/${user.user_id}`)}
                 >
                   View Details
                 </Button>

@@ -78,7 +78,7 @@ export function UserDetailsView({ userId }: UserDetailsViewProps) {
       {/* Header */}
       <Card>
         <div className="flex items-center justify-between">
-          <Button variant="ghost" onClick={() => router.back()}>
+          <Button variant="secondary" onClick={() => router.back()}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Users
           </Button>

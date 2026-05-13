@@ -44,6 +44,7 @@ export function UserBatchesTab({ userId, batches }: UserBatchesTabProps) {
   const instituteId = useAuthStore((state) => state.instituteId);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState("");
+  const [selectedRole, setSelectedRole] = useState<"student" | "teacher">("student");
 
   const { data: availableBatches = [] } = useBatchesQuery(instituteId ?? undefined);
   const assignToBatch = useAssignUserToBatchMutation();
@@ -55,10 +56,12 @@ export function UserBatchesTab({ userId, batches }: UserBatchesTabProps) {
     try {
       await assignToBatch.mutateAsync({
         userId,
-        batch_id: selectedBatchId
+        batch_id: selectedBatchId,
+        role: selectedRole
       });
       setShowAssignModal(false);
       setSelectedBatchId("");
+      setSelectedRole("student");
     } catch (error) {
       console.error("Failed to assign user to batch:", error);
     }
@@ -71,7 +74,10 @@ export function UserBatchesTab({ userId, batches }: UserBatchesTabProps) {
 
     if (confirm(message)) {
       try {
-        await removeFromBatch.mutateAsync(assignmentId);
+        await removeFromBatch.mutateAsync({
+          userId,
+          batchAssignmentId: assignmentId
+        });
       } catch (error) {
         console.error("Failed to remove from batch:", error);
       }
@@ -113,8 +119,7 @@ export function UserBatchesTab({ userId, batches }: UserBatchesTabProps) {
                     </div>
                   </div>
                   <Button
-                    variant="destructive"
-                    size="sm"
+                    variant="danger"
                     onClick={() => handleRemove(assignment.id, "teaching")}
                   >
                     <X className="w-4 h-4" />
@@ -158,8 +163,7 @@ export function UserBatchesTab({ userId, batches }: UserBatchesTabProps) {
                     </div>
                   </div>
                   <Button
-                    variant="destructive"
-                    size="sm"
+                    variant="danger"
                     onClick={() => handleRemove(assignment.id, "assigned")}
                   >
                     <X className="w-4 h-4" />
@@ -173,7 +177,7 @@ export function UserBatchesTab({ userId, batches }: UserBatchesTabProps) {
 
       {/* Assign Modal */}
       <Modal
-        isOpen={showAssignModal}
+        open={showAssignModal}
         onClose={() => setShowAssignModal(false)}
         title="Assign User to Batch"
       >
@@ -181,12 +185,21 @@ export function UserBatchesTab({ userId, batches }: UserBatchesTabProps) {
           <Select
             label="Batch"
             value={selectedBatchId}
-            onValueChange={setSelectedBatchId}
+            onChange={(e) => setSelectedBatchId(e.target.value)}
             options={availableBatches.map(batch => ({
-              value: batch.id,
-              label: `${batch.batch_name} (${batch.course_name} - ${batch.subcourse_name})`
+              value: batch.batch_id,
+              label: `${batch.batch_name} (${batch.course_id} - ${batch.subcourse_id})`
             }))}
-            placeholder="Select a batch"
+          />
+
+          <Select
+            label="Role"
+            value={selectedRole}
+            onChange={(e) => setSelectedRole(e.target.value as "student" | "teacher")}
+            options={[
+              { value: "student", label: "Student" },
+              { value: "teacher", label: "Teacher" }
+            ]}
           />
 
           <div className="flex justify-end gap-3">

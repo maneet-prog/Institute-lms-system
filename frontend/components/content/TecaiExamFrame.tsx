@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSubmitStudentContentMutation } from "@/hooks/useLmsQueries";
-import { Content, StudentSubmission } from "@/types/lms";
+import { Content, Course, Module, StudentSubmission, SubCourse } from "@/types/lms";
 
+import { buildExamRoutingContext, resolveExamPresentation } from "../exam-renderers/examRendererRegistry";
 import { ReadingExam } from "../exam-renderers/ReadingExam";
 import { WritingExam } from "../exam-renderers/WritingExam";
 import { ListeningExam } from "../exam-renderers/ListeningExam";
@@ -14,7 +15,8 @@ export function TecaiExamFrame({
     submission,
     studentName = "Student",
     autoStart = false,
-    allowSave = false
+    allowSave = false,
+    examContext
 }: {
     content: Content;
     // kept for backward compatibility if passed (not used in this component)
@@ -23,6 +25,12 @@ export function TecaiExamFrame({
     studentName?: string;
     autoStart?: boolean;
     allowSave?: boolean;
+    /** When present (e.g. course-module route), drives exam UI variant via registry */
+    examContext?: {
+        course?: Course;
+        exam_type?: SubCourse;
+        module?: Module;
+    };
 }) {
     const [latestSubmission, setLatestSubmission] = useState<StudentSubmission | null>(submission ?? null);
     const isSubmittingRef = useRef(false);
@@ -74,15 +82,34 @@ export function TecaiExamFrame({
 
     const examType = content.category || "reading";
 
+    const routing = buildExamRoutingContext(content, examContext);
+    const presentation = resolveExamPresentation(routing);
+
     if (examType === "writing") {
         return <WritingExam content={content} studentName={studentName} autoStart={autoStart} allowSave={allowSave && !isLocked} />;
     }
     if (examType === "listening") {
-        return <ListeningExam content={content} studentName={studentName} autoStart={autoStart} allowSave={allowSave && !isLocked} />;
+        return (
+            <ListeningExam
+                content={content}
+                studentName={studentName}
+                autoStart={autoStart}
+                allowSave={allowSave && !isLocked}
+                presentationVariant={presentation.variantId}
+            />
+        );
     }
     if (examType === "speaking") {
         return <SpeakingExam content={content} studentName={studentName} autoStart={autoStart} allowSave={allowSave && !isLocked} />;
     }
 
-    return <ReadingExam content={content} studentName={studentName} autoStart={autoStart} allowSave={allowSave && !isLocked} />;
+    return (
+        <ReadingExam
+            content={content}
+            studentName={studentName}
+            autoStart={autoStart}
+            allowSave={allowSave && !isLocked}
+        // presentationVariant={presentation.variantId}
+        />
+    );
 }

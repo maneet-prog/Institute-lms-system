@@ -36,6 +36,11 @@ type SubmissionWithDetails = {
   created_at: string;
 };
 
+interface UserSubmissionsTabProps {
+  userId: string;
+  submissions: SubmissionWithDetails[];
+}
+
 export function UserSubmissionsTab({ userId, submissions }: UserSubmissionsTabProps) {
   const [reviewingSubmission, setReviewingSubmission] = useState<SubmissionWithDetails | null>(null);
   const [reviewForm, setReviewForm] = useState({
@@ -52,8 +57,9 @@ export function UserSubmissionsTab({ userId, submissions }: UserSubmissionsTabPr
       await reviewSubmission.mutateAsync({
         userId,
         submissionId: reviewingSubmission.id,
-        awarded_marks: reviewForm.awarded_marks,
-        feedback: reviewForm.feedback
+        marks: reviewForm.awarded_marks,
+        feedback: reviewForm.feedback,
+        status: "reviewed"
       });
       setReviewingSubmission(null);
       setReviewForm({ awarded_marks: 0, feedback: "" });
@@ -151,7 +157,6 @@ export function UserSubmissionsTab({ userId, submissions }: UserSubmissionsTabPr
                 <div className="ml-4">
                   {submission.status === "submitted" && (
                     <Button
-                      size="sm"
                       onClick={() => openReviewModal(submission)}
                     >
                       <CheckCircle className="w-4 h-4 mr-2" />
@@ -167,7 +172,7 @@ export function UserSubmissionsTab({ userId, submissions }: UserSubmissionsTabPr
 
       {/* Review Modal */}
       <Modal
-        isOpen={!!reviewingSubmission}
+        open={!!reviewingSubmission}
         onClose={() => {
           setReviewingSubmission(null);
           setReviewForm({ awarded_marks: 0, feedback: "" });

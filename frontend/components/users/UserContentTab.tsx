@@ -16,7 +16,6 @@ import {
   useDeleteUserContentMutation
 } from "@/hooks/useLmsQueries";
 import { useAuthStore } from "@/store/auth";
-import { Content } from "@/types/lms";
 import { Plus, Edit, Trash2, FileText, Video, Image, Music, File, ExternalLink, Calendar } from "lucide-react";
 
 interface UserContentTabProps {
@@ -36,7 +35,7 @@ interface UserContentTabProps {
     module_name: string;
     batch_id: string | null;
     batch_name: string | null;
-    created_by: string;
+    created_by: string | null;
   }>;
   userRoles: string[];
 }
@@ -64,7 +63,7 @@ const contentTypeOptions = [
 export function UserContentTab({ userId, content, userRoles }: UserContentTabProps) {
   const instituteId = useAuthStore((state) => state.instituteId);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingContent, setEditingContent] = useState<Content | null>(null);
+  const [editingContent, setEditingContent] = useState<UserContentTabProps["content"][number] | null>(null);
   const [form, setForm] = useState({
     batch_id: "",
     module_id: "",
@@ -78,7 +77,7 @@ export function UserContentTab({ userId, content, userRoles }: UserContentTabPro
   });
 
   const { data: availableBatches = [] } = useBatchesQuery(instituteId ?? undefined);
-  const { data: availableModules = [] } = useModulesQuery(instituteId ?? undefined);
+  const { data: availableModules = [] } = useModulesQuery({ institute_id: instituteId ?? undefined });
 
   const createContent = useCreateUserContentMutation();
   const updateContent = useUpdateUserContentMutation();
@@ -106,7 +105,17 @@ export function UserContentTab({ userId, content, userRoles }: UserContentTabPro
     try {
       await createContent.mutateAsync({
         userId,
-        ...form
+        title: form.title,
+        description: form.description,
+        content_type: form.type,
+        content_data: {
+          external_url: form.external_url,
+          order_index: form.order_index,
+          duration: form.duration,
+          visibility_scope: form.visibility_scope
+        },
+        module_id: form.module_id,
+        batch_id: form.batch_id
       });
       setShowCreateModal(false);
       resetForm();
@@ -122,7 +131,14 @@ export function UserContentTab({ userId, content, userRoles }: UserContentTabPro
       await updateContent.mutateAsync({
         userId,
         contentId: editingContent.id,
-        ...form
+        title: form.title,
+        description: form.description,
+        content_data: {
+          external_url: form.external_url,
+          order_index: form.order_index,
+          duration: form.duration,
+          visibility_scope: form.visibility_scope
+        }
       });
       setEditingContent(null);
       resetForm();
@@ -141,7 +157,7 @@ export function UserContentTab({ userId, content, userRoles }: UserContentTabPro
     }
   };
 
-  const openEditModal = (contentItem: Content) => {
+  const openEditModal = (contentItem: UserContentTabProps["content"][number]) => {
     setEditingContent(contentItem);
     setForm({
       batch_id: contentItem.batch_id || "",
@@ -249,15 +265,13 @@ export function UserContentTab({ userId, content, userRoles }: UserContentTabPro
                   </div>
                   <div className="flex gap-2">
                     <Button
-                      variant="ghost"
-                      size="sm"
+                      variant="secondary"
                       onClick={() => openEditModal(item)}
                     >
                       <Edit className="w-4 h-4" />
                     </Button>
                     <Button
-                      variant="ghost"
-                      size="sm"
+                      variant="secondary"
                       onClick={() => handleDelete(item.id)}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -272,7 +286,7 @@ export function UserContentTab({ userId, content, userRoles }: UserContentTabPro
 
       {/* Create/Edit Modal */}
       <Modal
-        isOpen={showCreateModal || !!editingContent}
+        open={showCreateModal || !!editingContent}
         onClose={() => {
           setShowCreateModal(false);
           setEditingContent(null);
@@ -284,29 +298,27 @@ export function UserContentTab({ userId, content, userRoles }: UserContentTabPro
           <Select
             label="Batch"
             value={form.batch_id}
-            onValueChange={(value) => setForm(prev => ({ ...prev, batch_id: value }))}
-            options={availableBatches.map(batch => ({
-              value: batch.id,
+            onChange={(e) => setForm((prev) => ({ ...prev, batch_id: e.target.value }))}
+            options={availableBatches.map((batch) => ({
+              value: batch.batch_id,
               label: batch.batch_name
             }))}
-            placeholder="Select a batch"
           />
 
           <Select
             label="Module"
             value={form.module_id}
-            onValueChange={(value) => setForm(prev => ({ ...prev, module_id: value }))}
-            options={availableModules.map(module => ({
-              value: module.id,
+            onChange={(e) => setForm((prev) => ({ ...prev, module_id: e.target.value }))}
+            options={availableModules.map((module) => ({
+              value: module.module_id,
               label: module.module_name
             }))}
-            placeholder="Select a module"
           />
 
           <Select
             label="Content Type"
             value={form.type}
-            onValueChange={(value) => setForm(prev => ({ ...prev, type: value }))}
+            onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))}
             options={contentTypeOptions}
           />
 
@@ -351,7 +363,7 @@ export function UserContentTab({ userId, content, userRoles }: UserContentTabPro
           <Select
             label="Visibility Scope"
             value={form.visibility_scope}
-            onValueChange={(value) => setForm(prev => ({ ...prev, visibility_scope: value }))}
+            onChange={(e) => setForm((prev) => ({ ...prev, visibility_scope: e.target.value }))}
             options={[
               { value: "batch", label: "Batch Only" },
               { value: "selected_students", label: "Selected Students" }

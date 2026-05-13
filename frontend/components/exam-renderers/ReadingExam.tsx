@@ -100,6 +100,7 @@ export function ReadingExam({
         let renderedSets = new Set();
         let totalSeconds = initialSeconds;
         let timerInterval;
+        let sectionTracker = 0;
 
         function formatTime(total) {
             let m = Math.floor(total / 60);
@@ -163,7 +164,13 @@ export function ReadingExam({
                             html += await getImageHtml(d, zip, relationships);
                         }
                     }
-                    content.push({ type: "p", text: text.trim(), html });
+                    
+                    let trimmedText = text.trim();
+                    if (trimmedText.match(/\\[TECAI\\s*START\\]/i)) {
+                        sectionTracker++;
+                    }
+                    
+                    content.push({ type: "p", text: trimmedText, html });
                 }
                 if (node.nodeName === "w:tbl") {
                     const tableHTML = await renderTable(node, zip, relationships);
@@ -205,8 +212,16 @@ export function ReadingExam({
                         let fullText = "";
                         for (let t of texts) fullText += t.textContent;
                         fullText = fullText.replace(/\\s+/g, " ").trim();
-                        let parsed = parseTECAIInline(fullText);
-                        html += \`<div>\${parsed}</div>\`;
+                        
+                        if (fullText.match(/\\[TECAI\\s*TYPE\\s*4\\s*SET\\s*(\\d+)\\]/i)) {
+                            let mod = fullText.replace(/\\[TECAI\\s*TYPE\\s*4\\s*SET\\s*(\\d+)\\]/gi, (m, id) => {
+                                return \`<div class="table-q-placeholder" data-set-id="\${id}"></div>\`;
+                            });
+                            html += \`<div>\${mod}</div>\`;
+                        } else {
+                            let parsed = parseTECAIInline(fullText);
+                            html += \`<div>\${parsed}</div>\`;
+                        }
                     }
                     const drawings = cell.getElementsByTagName("w:drawing");
                     for (let d of drawings) {
@@ -258,8 +273,8 @@ export function ReadingExam({
             let tempSection = 0;
             content.forEach(p => {
                 let txt = p.text || "";
-                if (txt.includes("[TECAI START]")) { tempSection++; return; }
-                if (txt.includes("[TECAI END]")) return;
+                if (txt.match(/\\[TECAI\\s*START\\]/i)) { tempSection++; return; }
+                if (txt.match(/\\[TECAI\\s*END\\]/i)) return;
                 let m = txt.match(answerRegex);
                 if (m) {
                     let id = m[1];
@@ -272,11 +287,21 @@ export function ReadingExam({
 
             content.forEach(p => {
                 let txt = p.text || "";
-                if (txt.includes("[TECAI START]")) { inBlock = true; currentSection++; return; }
-                if (txt.includes("[TECAI END]")) { inBlock = false; return; }
+                if (txt.match(/\\[TECAI\\s*START\\]/i)) { inBlock = true; currentSection++; return; }
+                if (txt.match(/\\[TECAI\\s*END\\]/i)) { inBlock = false; return; }
 
                 if (p.type === "table" || /^<table[\\s>]/i.test(p.html || "")) {
-                    if (inBlock) { rightHTML += p.html; } else { leftHTML += p.html; }
+                    let tempDiv = document.createElement("div");
+                    tempDiv.innerHTML = p.html;
+
+                    let placeholders = tempDiv.querySelectorAll(".table-q-placeholder");
+                    placeholders.forEach(ph => {
+                        let id = ph.getAttribute("data-set-id");
+                        let currentQ = qNum++;
+                        let dataset = currentSection + "_" + id;
+                        ph.outerHTML = \`<div id="q\${currentQ}"><b>\${currentQ}.</b> <span class="dropzone" data-set="\${dataset}"></span></div>\`;
+                    });
+                    if (inBlock) { rightHTML += tempDiv.innerHTML; } else { leftHTML += tempDiv.innerHTML; }
                     return;
                 }
 
@@ -299,26 +324,26 @@ export function ReadingExam({
                         return;
                     }
 
-                    if (txt.includes("[TECAI Type 1]")) {
-                        let clean = line.replace(/\\[TECAI Type 1\\]/i, "");
+                    if (txt.match(/\\[TECAI\\s*Type\\s*1\\]/i)) {
+                        let clean = line.replace(/\\[TECAI\\s*Type\\s*1\\]/i, "");
                         rightHTML += \`<div id="q\${qNum}"><b>\${qNum}.</b> \${clean}<br>
         <label><input type="radio" name="q\${qNum}" value="TRUE"> TRUE</label>
         <label><input type="radio" name="q\${qNum}" value="FALSE"> FALSE</label>
         <label><input type="radio" name="q\${qNum}" value="NOT GIVEN"> NOT GIVEN</label></div>\`;
                         qNum++; return;
                     }
-                    if (txt.includes("[TECAI Type 2]")) {
-                        let clean = line.replace(/\\[TECAI Type 2\\]/i, "");
+                    if (txt.match(/\\[TECAI\\s*Type\\s*2\\]/i)) {
+                        let clean = line.replace(/\\[TECAI\\s*Type\\s*2\\]/i, "");
                         rightHTML += \`<div id="q\${qNum}"><b>\${qNum}.</b> \${clean}<br>
         <label><input type="radio" name="q\${qNum}" value="YES"> YES</label>
         <label><input type="radio" name="q\${qNum}" value="NO"> NO</label>
         <label><input type="radio" name="q\${qNum}" value="NOT GIVEN"> NOT GIVEN</label></div>\`;
                         qNum++; return;
                     }
-                    if (txt.includes("[TECAI Type 3]")) {
+                    if (txt.match(/\\[TECAI\\s*Type\\s*3\\]/i)) {
                         let temp = document.createElement("div");
                         temp.innerHTML = line;
-                        let parts = temp.textContent.split(/\\[TECAI Type 3\\]/i);
+                        let parts = temp.textContent.split(/\\[TECAI\\s*Type\\s*3\\]/i);
                         let out = "";
                         parts.forEach((t, i) => {
                             out += t;
@@ -332,29 +357,29 @@ export function ReadingExam({
                         rightHTML += \`<p id="q\${qNum}"><b>\${qNum}.</b> \${mod}</p>\`;
                         qNum++; return;
                     }
-                    if (txt.includes("[TECAI Type 5]")) {
-                        let clean = line.replace(/\\[TECAI Type 5\\]/i, "");
+                    if (txt.match(/\\[TECAI\\s*Type\\s*5\\]/i)) {
+                        let clean = txt.replace(/\\[TECAI\\s*Type\\s*5\\]/i, "");
                         rightHTML += \`<div id="q\${qNum}"><b>\${qNum}.</b> \${clean}<br>\`;
                         return;
                     }
-                    if (txt.includes("[TECAI TYPE 5.1 OPTIONS]")) {
-                        let opts = txt.replace(/\\[TECAI TYPE 5.1 OPTIONS\\]/i, "").split("/").map(o => o.trim());
+                    if (txt.match(/\\[TECAI\\s*TYPE\\s*5\\.1\\s*OPTIONS\\]/i)) {
+                        let opts = txt.replace(/\\[TECAI\\s*TYPE\\s*5\\.1\\s*OPTIONS\\]/i, "").split("/").map(o => o.trim());
                         let targetQ = qNum;
                         opts.forEach(opt => rightHTML += \`<label><input type="radio" name="q\${targetQ}" value="\${opt}"> \${opt}</label><br>\`);
                         rightHTML += \`</div>\`;
                         qNum++; return;
                     }
-                    if (txt.includes("[TECAI TYPE 5.2 OPTIONS]")) {
-                        let opts = txt.replace(/\\[TECAI TYPE 5.2 OPTIONS\\]/i, "").split("/").map(o => o.trim());
+                    if (txt.match(/\\[TECAI\\s*TYPE\\s*5\\.2\\s*OPTIONS\\]/i)) {
+                        let opts = txt.replace(/\\[TECAI\\s*TYPE\\s*5\\.2\\s*OPTIONS\\]/i, "").split("/").map(o => o.trim());
                         let targetQ = qNum;
                         opts.forEach(opt => rightHTML += \`<label><input type="checkbox" name="q\${targetQ}" value="\${opt}"> \${opt}</label><br>\`);
                         rightHTML += \`</div>\`;
                         qNum++; return;
                     }
-                    if (txt.includes("[TECAI Type 6]")) {
+                    if (txt.match(/\\[TECAI\\s*Type\\s*6\\]/i)) {
                         let temp = document.createElement("div");
                         temp.innerHTML = line;
-                        let parts = temp.textContent.split(/\\[TECAI Type 6\\]/i);
+                        let parts = temp.textContent.split(/\\[TECAI\\s*Type\\s*6\\]/i);
                         let out = "";
                         let startQ = qNum;
                         parts.forEach((t, i) => {
@@ -367,18 +392,18 @@ export function ReadingExam({
                         rightHTML += \`<div id="q\${startQ}">\${out}</div>\`;
                         return;
                     }
-                    if (txt.includes("[TECAI TYPE 7]") && !txt.includes("OPTIONS")) {
-                        let clean = txt.replace(/\\[TECAI TYPE 7\\]/gi, "").trim();
+                    if (txt.match(/\\[TECAI\\s*TYPE\\s*7\\]/i) && !txt.match("OPTIONS")) {
+                        let clean = txt.replace(/\\[TECAI\\s*TYPE\\s*7\\]/i, "").trim();
                         rightHTML += \`<div id="q\${qNum}"> <b>\${qNum}.</b> \${clean}\`;
                         return;
                     }
 
-                    if (txt.includes("[TECAI TYPE 7 OPTIONS]")) {
+                    if (txt.match(/\\[TECAI\\s*TYPE\\s*7\\s*OPTIONS\\]/i)) {
                         return;
                     }
 
                     let prevP = content[content.indexOf(p)-1];
-                    if (prevP && prevP.text.includes("[TECAI TYPE 7 OPTIONS]") && !txt.includes("END")) {
+                    if (prevP && prevP.text.match(/\\[TECAI\\s*TYPE\\s*7\\s*OPTIONS\\]/i) && !txt.match("END")) {
                         let options = txt.split("/").map(o => o.trim());
 
                         let selectHTML = \`<select name = "q\${qNum}" style = "margin-left:10px; padding:4px;" >
@@ -406,7 +431,7 @@ export function ReadingExam({
                         }
 
                         // 2. Format the range label (e.g., 41 – 42)
-                        let qRange = (limit > 1) ? \`\${qNum} – \${qNum+limit-1}\` : \`\${qNum}\`;
+                        let qRange = (limit > 1) ? \`\${qNum}–\${qNum+limit-1}\` : \`\${qNum}\`;
                         let clean = txt.replace(/\\[TECAI\\s*TYPE\\s*8\\]/i, "");
 
                         // 3. Add 'type-8-group' class and data-limit for the Navigation function to find
@@ -441,7 +466,7 @@ export function ReadingExam({
 
             document.getElementById("rightPanel").innerHTML = rightHTML;
             document.getElementById("leftPanel").innerHTML = leftHTML;
-            createNav(qNum - 1);
+            createNav();
         }
 
         document.addEventListener("dragstart", e => {
@@ -526,7 +551,7 @@ export function ReadingExam({
 
         function buildAnswerText() {
             const now = new Date().toLocaleString();
-            return \`Name: \${studentName} \nDate: \${now} \nAnswers: \n      \n\${collectAnswers()}\n\nSelf Assessment:\n[ ] Confident\n[ ] Need Practice\n[ ] Time Management Issue\n\`;
+            return \`Name: \${studentName} \\nDate: \${now} \\nAnswers: \\n      \\n\${collectAnswers()}\\n\\nSelf Assessment:\\n[ ] Confident\\n[ ] Need Practice\\n[ ] Time Management Issue\\n\`;
         }
 
         function downloadAnswers() {
@@ -537,25 +562,25 @@ export function ReadingExam({
             a.download = \`\${studentName}_\${Date.now()}.txt\`;
             a.click();
 
+            const timeTaken = initialSeconds - totalSeconds;
             if (allowSave && window.parent) {
-                window.parent.postMessage({ type: "tecai-submit", responseText: content }, "*");
+                window.parent.postMessage({ type: "tecai-submit", responseText: content, timeTakenSeconds: timeTaken }, "*");
             }
         }
 
         function collectAnswers() {
             let data = [];
             for (let i = 1; i < qNum; i++) {
-                let checkedInputs = document.querySelectorAll(\`input[name="q\${i}"]:checked\`);
-                let textInputs = document.querySelectorAll(\`input[name="q\${i}"]:not([type="radio"]):not([type="checkbox"]), input[name^="q\${i}_"]:not([type="radio"]):not([type="checkbox"])\`);
-                let dropdown = document.querySelector(\`select[name="q\${i}"]\`);
                 let qDiv = document.getElementById(\`q\${i}\`);
-                let drops = qDiv ? qDiv.querySelectorAll(".dropzone") : [];
 
-                // Inside the for (let i = 1; i < qNum; i++) loop:
-                let container = document.getElementById(\`q\${i}\`);
-                if (container && container.classList.contains("type-8-group")) {
-                    let limit = parseInt(container.getAttribute("data-limit"));
-                    let checked = container.querySelectorAll('input:checked');
+                if (!qDiv) {
+                    data.push(\`\${i}. \`);
+                    continue;
+                }
+
+                if (qDiv.classList.contains("type-8-group")) {
+                    let limit = parseInt(qDiv.getAttribute("data-limit"));
+                    let checked = qDiv.querySelectorAll('input:checked');
                     let values = Array.from(checked).map(c => c.value);
 
                     let rangeLabel = (limit > 1) ? \`\${i}–\${i + limit - 1}\` : \`\${i}\`;
@@ -565,28 +590,49 @@ export function ReadingExam({
                     continue;
                 }
 
-                if (checkedInputs.length > 0) {
-                    let values = [];
-                    checkedInputs.forEach(input => values.push(input.value));
-                    data.push(\`\${i}. \${values.join(" | ")}\`);
-                } else if (dropdown) {
-                    // NEW: Logic to capture dropdown selection
-                    data.push(\`\${i}. \${dropdown.value.trim() || " "}\`);
-                }
-                    else if (textInputs.length > 0) {
-                    let values = [];
-                    textInputs.forEach(inp => values.push(inp.value.trim() || " "));
-                    data.push(\`\${i}. \${values.join(" | ")}\`);
-                } else if (drops.length > 0) {
+                let drops = qDiv.querySelectorAll(".dropzone");
+                if (drops.length > 0) {
                     let values = [];
                     drops.forEach(d => {
                         let dragged = d.querySelector(".draggable");
                         values.push(dragged ? dragged.innerText.trim() : " ");
                     });
                     data.push(\`\${i}. \${values.join(" | ")}\`);
-                } else {
-                    data.push(\`\${i}. \`);
+                    continue;
                 }
+
+                let checkedInputs = qDiv.querySelectorAll('input[type="radio"]:checked, input[type="checkbox"]:checked');
+                if (checkedInputs.length > 0) {
+                    let values = Array.from(checkedInputs).map(input => input.value);
+                    data.push(\`\${i}. \${values.join(" | ")}\`);
+                    continue;
+                }
+
+                let dropdown = qDiv.querySelector("select");
+                if (dropdown) {
+                    data.push(\`\${i}. \${dropdown.value.trim() || " "}\`);
+                    continue;
+                }
+
+                let textInputs = qDiv.querySelectorAll('input[type="text"], input:not([type])');
+                if (textInputs.length > 0) {
+                    textInputs.forEach(inp => {
+                        let nameMatch = inp.name.match(/q(\\d+)/);
+                        let currentNum = nameMatch ? nameMatch[1] : i;
+
+                        data.push(\`\${currentNum}. \${inp.value.trim() || " "}\`);
+                    });
+
+                    if (textInputs.length > 1) {
+                        let lastInpName = textInputs[textInputs.length - 1].name.match(/q(\\d+)/);
+                        if (lastInpName) {
+                            i = parseInt(lastInpName[1]);
+                        }
+                    }
+                    continue;
+                }
+
+                data.push(\`\${i}. \`);
             }
             return data.join("\\n");
         }

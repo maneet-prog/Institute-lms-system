@@ -61,7 +61,15 @@ exports.contentSchema = Joi.object({
   attempt_limit: Joi.number().integer().min(0).allow("", null),
   exam_type_id: Joi.string().allow("", null),
   renderer_kind: Joi.string()
-    .valid("tecai_reading", "tecai_writing", "structured_reading", "structured_writing", "custom")
+    .valid(
+      "tecai_reading",
+      "tecai_writing",
+      "tecai_listening",
+      "tecai_speaking",
+      "structured_reading",
+      "structured_writing",
+      "custom"
+    )
     .allow("", null),
   timer_seconds: Joi.number().integer().min(0).allow("", null),
   exam_parts: Joi.alternatives().try(Joi.string(), Joi.array()).allow("", null),
@@ -85,7 +93,14 @@ exports.contentUpdateSchema = Joi.object({
   attempt_limit: Joi.number().integer().min(0).allow("", null),
   exam_type_id: Joi.string().allow("", null),
   renderer_kind: Joi.string()
-    .valid("tecai_reading", "tecai_writing", "structured_reading", "structured_writing", "custom")
+    .valid(
+      "tecai_reading",
+      "tecai_writing",
+      "tecai_listening",
+      "structured_reading",
+      "structured_writing",
+      "custom"
+    )
     .allow("", null),
   timer_seconds: Joi.number().integer().min(0).allow("", null),
   exam_parts: Joi.alternatives().try(Joi.string(), Joi.array()).allow("", null),
@@ -116,7 +131,14 @@ exports.reusableContentSchema = Joi.object({
   attempt_limit: Joi.number().integer().min(0).allow("", null),
   exam_type_id: Joi.string().allow("", null),
   renderer_kind: Joi.string()
-    .valid("tecai_reading", "tecai_writing", "structured_reading", "structured_writing", "custom")
+    .valid(
+      "tecai_reading",
+      "tecai_writing",
+      "tecai_listening",
+      "structured_reading",
+      "structured_writing",
+      "custom"
+    )
     .allow("", null),
   timer_seconds: Joi.number().integer().min(0).allow("", null),
   exam_parts: Joi.alternatives().try(Joi.string(), Joi.array()).allow("", null),
@@ -138,7 +160,14 @@ exports.reusableContentUpdateSchema = Joi.object({
   attempt_limit: Joi.number().integer().min(0).allow("", null),
   exam_type_id: Joi.string().allow("", null),
   renderer_kind: Joi.string()
-    .valid("tecai_reading", "tecai_writing", "structured_reading", "structured_writing", "custom")
+    .valid(
+      "tecai_reading",
+      "tecai_writing",
+      "tecai_listening",
+      "structured_reading",
+      "structured_writing",
+      "custom"
+    )
     .allow("", null),
   timer_seconds: Joi.number().integer().min(0).allow("", null),
   exam_parts: Joi.alternatives().try(Joi.string(), Joi.array()).allow("", null),

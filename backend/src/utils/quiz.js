@@ -1,11 +1,13 @@
 const AppError = require("./AppError");
 
 const DEFAULT_TIMER_SECONDS = 3600;
+const TECAI_LISTENING_KIND = "tecai_listening";
 const ensureArray = (value) => (Array.isArray(value) ? value : []);
 const isTecaiRenderer = (renderer) =>
   (renderer?.kind === "tecai_reading" && Array.isArray(renderer.paragraphs)) ||
   (renderer?.kind === "tecai_writing" &&
-    (Array.isArray(renderer.parts) || Array.isArray(renderer.blocks)));
+    (Array.isArray(renderer.parts) || Array.isArray(renderer.blocks))) ||
+  renderer?.kind === TECAI_LISTENING_KIND;
 
 const normalizeQuestion = (question, index) => {
   const questionId = String(
@@ -85,16 +87,41 @@ const resolveQuizFromContent = (content) => {
     return structuredQuiz;
   }
 
-  if (content?.profile?.exam?.rendererKind === "tecai_reading" || content?.profile?.exam?.rendererKind === "tecai_writing") {
+  if (
+    content?.profile?.exam?.rendererKind === "tecai_reading" ||
+    content?.profile?.exam?.rendererKind === "tecai_writing" ||
+    content?.profile?.exam?.rendererKind === TECAI_LISTENING_KIND
+  ) {
     const rendererKind = content.profile.exam.rendererKind;
+    const timerSeconds =
+      Number(content.profile.exam.timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS;
+    if (rendererKind === "tecai_reading") {
+      return {
+        mode: "written",
+        attemptLimit: Math.max(1, Number(content?.profile?.quiz?.attemptLimit || 999) || 999),
+        questions: [],
+        renderer: { kind: "tecai_reading", timer_seconds: timerSeconds, paragraphs: [] }
+      };
+    }
+    if (rendererKind === TECAI_LISTENING_KIND) {
+      return {
+        mode: "written",
+        attemptLimit: Math.max(1, Number(content?.profile?.quiz?.attemptLimit || 999) || 999),
+        questions: [],
+        renderer: {
+          kind: TECAI_LISTENING_KIND,
+          timer_seconds: timerSeconds,
+          audio_url: String(content.externalUrl || ""),
+          prompt_file_url: String(content.fileUrl || ""),
+          instructions: String(content.profile?.instructions || "")
+        }
+      };
+    }
     return {
       mode: "written",
       attemptLimit: Math.max(1, Number(content?.profile?.quiz?.attemptLimit || 999) || 999),
       questions: [],
-      renderer:
-        rendererKind === "tecai_reading"
-          ? { kind: "tecai_reading", timer_seconds: Number(content.profile.exam.timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS, paragraphs: [] }
-          : { kind: "tecai_writing", timer_seconds: Number(content.profile.exam.timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS, blocks: [] }
+      renderer: { kind: "tecai_writing", timer_seconds: timerSeconds, blocks: [] }
     };
   }
 

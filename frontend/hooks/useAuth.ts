@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 
 import { getRoleHome } from "@/constants/routes";
+import { api } from "@/services/client";
 import { forgotPassword, loginUser, registerUser, verifyRegistration } from "@/services/auth";
 import { useAuthStore } from "@/store/auth";
 import { useUiStore } from "@/store/ui";
@@ -51,5 +52,25 @@ export function useLogin() {
 export function useForgotPassword() {
   return useMutation({
     mutationFn: forgotPassword
+  });
+}
+
+export type ResetPasswordPayload = {
+  token: string;
+  password: string;
+};
+
+export type ResetPasswordResponse = {
+  message: string;
+};
+
+async function resetPasswordWithToken(payload: ResetPasswordPayload): Promise<ResetPasswordResponse> {
+  const { data } = await api.post<ResetPasswordResponse>("/auth/reset-password", payload);
+  return data;
+}
+
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: resetPasswordWithToken
   });
 }

@@ -111,8 +111,7 @@ export function UserCoursesTab({ userId, courses }: UserCoursesTabProps) {
                     </div>
                   </div>
                   <Button
-                    variant="destructive"
-                    size="sm"
+                    variant="danger"
                     onClick={() => handleRemoveEnrollment(enrollment.id)}
                   >
                     <X className="w-4 h-4" />
@@ -146,7 +145,7 @@ export function UserCoursesTab({ userId, courses }: UserCoursesTabProps) {
 
       {/* Enroll Modal */}
       <Modal
-        isOpen={showEnrollModal}
+        open={showEnrollModal}
         onClose={() => setShowEnrollModal(false)}
         title="Enroll User in Course"
       >
@@ -154,30 +153,28 @@ export function UserCoursesTab({ userId, courses }: UserCoursesTabProps) {
           <Select
             label="Course"
             value={enrollForm.course_id}
-            onValueChange={(value) => setEnrollForm(prev => ({
+            onChange={(e) => setEnrollForm((prev) => ({
               ...prev,
-              course_id: value,
+              course_id: e.target.value,
               subcourse_id: "" // Reset subcourse when course changes
             }))}
-            options={availableCourses.map(course => ({
-              value: course.id,
+            options={availableCourses.map((course) => ({
+              value: course.course_id,
               label: course.course_name
             }))}
-            placeholder="Select a course"
           />
 
           <Select
             label="Subcourse"
             value={enrollForm.subcourse_id}
-            onValueChange={(value) => setEnrollForm(prev => ({
+            onChange={(e) => setEnrollForm((prev) => ({
               ...prev,
-              subcourse_id: value
+              subcourse_id: e.target.value
             }))}
-            options={availableSubcourses.map(subcourse => ({
-              value: subcourse.id,
+            options={availableSubcourses.map((subcourse) => ({
+              value: subcourse.subcourse_id,
               label: subcourse.subcourse_name
             }))}
-            placeholder="Select a subcourse"
             disabled={!enrollForm.course_id}
           />
 
