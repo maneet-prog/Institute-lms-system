@@ -85,6 +85,12 @@ export function ListeningExam({
         .type-8-group { padding: 10px; background: #f0f4f8; border-radius: 5px; margin-bottom: 15px; }
         body { -webkit-user-select: none; -ms-user-select: none; user-select: none; }
         img { -webkit-user-drag: none; user-drag: none; }
+        .type-9-header-row { display: flex; font-weight: bold; background: #0b1f3a; color: white; padding: 10px; border-radius: 4px 4px 0 0; margin-top: 20px; }
+        .type-9-row { display: flex; align-items: center; border-bottom: 1px solid #e0e6ed; padding: 10px; background: white; }
+        .type-9-statement-head, .type-9-statement { flex: 2; padding-right: 15px; }
+        .type-9-options-head, .type-9-options { flex: 3; display: flex; justify-content: space-around; align-items: center; }
+        .type-9-option-label { width: 20px; text-align: center; }
+        .type-9-options input[type="radio"] { cursor: pointer; transform: scale(1.2); }
     </style>
 </head>
 <body class="${escapeHtml(presentationVariant)}">
@@ -237,31 +243,40 @@ export function ListeningExam({
                     let text = "";
                     let html = "";
                     const runs = node.getElementsByTagName("w:r");
+
                     for (let r of runs) {
                         let t = r.getElementsByTagName("w:t")[0];
                         if (!t) continue;
+
                         let val = t.textContent;
                         text += val;
+
                         if (r.getElementsByTagName("w:b").length) val = \`<b>\${val}</b>\`;
                         if (r.getElementsByTagName("w:i").length) val = \`<i>\${val}</i>\`;
                         if (r.getElementsByTagName("w:u").length) val = \`<u>\${val}</u>\`;
+
                         html += val;
+
                         const drawings = r.getElementsByTagName("w:drawing");
                         for (let d of drawings) {
                             html += await getImageHtml(d, zip, relationships);
                         }
                     }
+
                     let trimmedText = text.trim();
                     if (trimmedText.match(/\\[TECAI\\s*START\\]/i)) {
                         sectionTracker++;
                     }
+
                     content.push({ type: "p", text: text.trim(), html });
                 }
+
                 if (node.nodeName === "w:tbl") {
                     const tableHTML = await renderTable(node, zip, relationships);
                     content.push({ type: "table", html: tableHTML });
                 }
             }
+
             return content;
         }
 
@@ -301,10 +316,17 @@ export function ListeningExam({
                         fullText = fullText.replace(/\\s+/g, " ").trim();
                         if (fullText.match(/\\[TECAI\\s*TYPE\\s*4\\s*SET\\s*(\\d+)\\]/i)) {
                             let mod = fullText.replace(/\\[TECAI\\s*TYPE\\s*4\\s*SET\\s*(\\d+)\\]/gi, function (m, id) {
-                                return \`<div class="table-q-placeholder" data-set-id="\${id}"></div>\`;
+                                return \`<div class="table-q-placeholder" data-type="4" data-set-id="\${id}"></div>\`;
                             });
                             html += \`<div>\${mod}</div>\`;
-                        } else {
+                        }
+                        else if (fullText.match(/\\[TECAI\\s*Type\\s*6\\]/i)) {
+                            let mod = fullText.replace(/\\[TECAI\\s*Type\\s*6\\]/gi, () => {
+                                return \`<span class="table-q-placeholder" data-type="6"></span>\`;
+                            });
+                            html += \`<div>\${mod}</div>\`;
+                        }
+                        else {
                             let parsed = parseTECAIInline(fullText);
                             html += \`<div>\${parsed}</div>\`;
                         }
@@ -381,10 +403,16 @@ export function ListeningExam({
                     tempDiv.innerHTML = p.html;
                     let placeholders = tempDiv.querySelectorAll(".table-q-placeholder");
                     placeholders.forEach(function (ph) {
-                        let id = ph.getAttribute("data-set-id");
+                        let type = ph.getAttribute("data-type");
                         let currentQ = qNum++;
-                        let dataset = \`\${currentSection}_\${id}\`;
-                        ph.outerHTML = \`<div id="q\${currentQ}"><b>\${currentQ}.</b> <span class="dropzone" data-set="\${dataset}"></span></div>\`;
+
+                        if (type === "4") {
+                            let id = ph.getAttribute("data-set-id");
+                            let dataset = \`\${currentSection}_\${id}\`;
+                            ph.outerHTML = \`<div id="q\${currentQ}"><b>\${currentQ}.</b> <span class="dropzone" data-set="\${dataset}"></span></div>\`;
+                        } else if (type === "6") {
+                            ph.outerHTML = \`<b id="q\${currentQ}">\${currentQ}.</b> <input name="q\${currentQ}" style="width:100px;margin:0 5px;">\`;
+                        }
                     });
                     panelHTML += tempDiv.innerHTML;
                     return;
@@ -511,11 +539,13 @@ export function ListeningExam({
                     if (txt.match(/\\[TECAI\\s*TYPE\\s*8\\]/i)) {
                         let limit = 2;
                         for (let i = content.indexOf(p); i < content.length; i++) {
-                            let peek = content[i].text;
-                            let mm = peek && peek.match(/\\[TECAI\\s*TYPE\\s*8\\.(\\d+)\\s*OPTIONS\\]/i);
-                            if (mm) {
-                                limit = parseInt(mm[1], 10);
-                                break;
+                            if (content[i] && content[i].text) {
+                                let peek = content[i].text;
+                                let mm = peek && peek.match(/\\[TECAI\\s*TYPE\\s*8\\.(\\d+)\\s*OPTIONS\\]/i);
+                                if (mm) {
+                                    limit = parseInt(mm[1], 10);
+                                    break;
+                                }
                             }
                         }
                         let qRange = limit > 1 ? \`\${qNum}–\${qNum + limit - 1}\` : \`\${qNum}\`;
@@ -533,6 +563,46 @@ export function ListeningExam({
                         });
                         panelHTML += \`</div>\`;
                         qNum += limit;
+                        return;
+                    }
+                        
+                    //Type 9 - Matrix
+                    if (txt.includes("[TECAI TYPE 9 HEADERS]")) {
+                        let rawHeaders = txt.split(']')[1] || "";
+                        type9Headers = rawHeaders.split('/').map(h => h.trim());
+
+                        // Render the Header Bar
+                        let headerHtml = \`
+        <div class="type-9-header-row">
+            <div class="type-9-statement-head">Questions</div>
+            <div class="type-9-options-head">
+                \${type9Headers.map(h => \`<div style="flex:1; text-align:center;">\${h}</div>\`).join('')}
+            </div>
+        </div>\`;
+
+                        panelHTML += headerHtml;
+                        return; // ❌ CRITICAL: Stops the loop so this line doesn't print again
+                    }
+
+                    // 2. Detect and render Type 9 Question Row
+                    if (txt.includes("[TECAI TYPE 9]")) {
+                        let currentQ = qNum++;
+                        // Remove the tag so it doesn't show in the question text
+                        let cleanStatement = txt.replace(/\\[TECAI\\s*TYPE\\s*9\\]/gi, '').trim();
+
+                        let rowHtml = \`
+        <div class="type-9-row" id="q\${currentQ}">
+            <div class="type-9-statement"><b>\${currentQ}.</b> \${cleanStatement}</div>
+            <div class="type-9-options">
+                \${type9Headers.map(header => \`
+                    <div style="flex:1; text-align:center;">
+                        <input type="radio" name="q\${currentQ}" value="\${header}" title="\${header}">
+                    </div>
+                \`).join('')}
+            </div>
+        </div>\`;
+
+                        panelHTML += rowHtml;
                         return;
                     }
 

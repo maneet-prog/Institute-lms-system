@@ -177,6 +177,50 @@
             -webkit-user-drag: none;
             user-drag: none;
         }
+
+        .type-9-header-row {
+            display: flex;
+            font-weight: bold;
+            background: #0b1f3a;
+            color: white;
+            padding: 10px;
+            border-radius: 4px 4px 0 0;
+            margin-top: 20px;
+        }
+
+        .type-9-row {
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #e0e6ed;
+            padding: 10px;
+            background: white;
+        }
+
+        .type-9-statement-head,
+        .type-9-statement {
+            flex: 2;
+            /* Adjust this to give more/less room to the text */
+            padding-right: 15px;
+        }
+
+        .type-9-options-head,
+        .type-9-options {
+            flex: 3;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        .type-9-option-label {
+            width: 20px;
+            text-align: center;
+        }
+
+        .type-9-options input[type="radio"] {
+            cursor: pointer;
+            transform: scale(1.2);
+            /* Makes buttons easier to click */
+        }
     </style>
 </head>
 
@@ -301,6 +345,7 @@
                 });
             }
         }
+
         // Update your existing parseTECAIInline or link detection logic:
         // When you find a link in your docx processing, use this:
         function handleMediaLink(url) {
@@ -336,6 +381,7 @@
                 }
             }, 1000);
         }
+
         function getParagraphs(xml) {
             const parser = new DOMParser();
             const doc = parser.parseFromString(xml, "application/xml");
@@ -415,7 +461,7 @@
         }
 
         async function renderTable(tblNode, zip, sectionId) {
-            let html = "<table style='border:none;border-collapse:collapse;width:100%'>";
+            let html = "<table border='1' style='border-collapse:collapse;width:100%'>";
 
             const rows = tblNode.getElementsByTagName("w:tr");
 
@@ -436,17 +482,22 @@
                         let fullText = "";
 
                         for (let t of texts) {
-                            fullText += t.textContent || "";
+                            fullText += t.textContent;
                         }
 
                         fullText = fullText.replace(/\s+/g, " ").trim();
 
-                        // Inside renderTable function, replace the Type 4 detection logic:
+                        // Inside renderTable function
                         if (fullText.match(/\[TECAI\s*TYPE\s*4\s*SET\s*(\d+)\]/i)) {
                             let mod = fullText.replace(/\[TECAI\s*TYPE\s*4\s*SET\s*(\d+)\]/gi, (m, id) => {
-                                // Use a placeholder class and store the set ID in data-set
-                                // We will assign the real ID and Q number during the process() loop
-                                return `<div class="table-q-placeholder" data-set-id="${id}"></div>`;
+                                // CRITICAL: You must add data-type="4" so the process loop can find it
+                                return `<div class="table-q-placeholder" data-type="4" data-set-id="${id}"></div>`;
+                            });
+                            html += `<div>${mod}</div>`;
+                        }
+                        else if (fullText.match(/\[TECAI\s*Type\s*6\]/i)) {
+                            let mod = fullText.replace(/\[TECAI\s*Type\s*6\]/gi, () => {
+                                return `<span class="table-q-placeholder" data-type="6"></span>`;
                             });
                             html += `<div>${mod}</div>`;
                         }
@@ -501,20 +552,20 @@
             // [TECAI Type 6]
             output = output.replace(/\[TECAI\s*Type\s*6\]/gi, () => {
                 return `<b>${qNum++}.</b>
-        <input id="q${qNum - 1}" name="q${qNum - 1}" style="width:100px;margin:0 5px;">`;
+        <input name="q${qNum - 1}" style="width:100px;margin:0 5px;">`;
             });
 
             // [ input box ]
             output = output.replace(/\[\s*input\s*box\s*\]/gi, () => {
                 return `<b>${qNum++}.</b>
-        <input id="q${qNum - 1}" name="q${qNum - 1}" style="width:100px;margin:0 5px;">`;
+        <input name="q${qNum - 1}" style="width:100px;margin:0 5px;">`;
             });
 
             return output;
         }
 
         function process(content) {
-            currentSection = 0;
+            let currentSection = 0;
             let inBlock = false;
             let panelHTML = "";
             // qNum = 1;
@@ -556,14 +607,9 @@
             content.forEach(p => {
                 let txt = p.text || "";
 
-                if (txt.match(/\[TECAI\s*START\]/i)) {
-                    inBlock = true;
-                    currentSection++;
-                    return;
-                }
+                if (txt.match(/\[TECAI\s*START\]/i)) { inBlock = true; currentSection++; return; }
                 if (txt.match(/\[TECAI\s*END\]/i)) { inBlock = false; return; }
 
-                // Inside the process(content) function, find the table handling block:
                 if (p.type === "table") {
                     let tempDiv = document.createElement("div");
                     tempDiv.innerHTML = p.html;
@@ -572,15 +618,25 @@
                     let placeholders = tempDiv.querySelectorAll(".table-q-placeholder");
 
                     placeholders.forEach(ph => {
-                        let id = ph.getAttribute("data-set-id");
-                        let currentQ = qNum++; // Now qNum is assigned in correct document order
-                        let dataset = currentSection + "_" + id;
+                        let type = ph.getAttribute("data-type");
+                        let currentQ = qNum++;
 
-                        // Replace placeholder with actual question HTML
-                        ph.outerHTML = `<div id="q${currentQ}"><b>${currentQ}.</b> <span class="dropzone" data-set="${dataset}"></span></div>`;
+                        if (type === "4") {
+                            let id = ph.getAttribute("data-set-id");
+                            let dataset = currentSection + "_" + id;
+                            ph.outerHTML = `<div id="q${currentQ}"><b>${currentQ}.</b> <span class="dropzone" data-set="${dataset}"></span></div>`;
+                        }
+                        // ADD THIS FOR TYPE 6 placeholder replacement
+                        else if (type === "6") {
+                            ph.outerHTML = `<b id="q${currentQ}">${currentQ}.</b> <input name="q${currentQ}" style="width:100px;margin:0 5px;">`;
+                        }
                     });
 
-                    panelHTML += tempDiv.innerHTML;
+                    if (inBlock) {
+                        panelHTML += tempDiv.innerHTML;
+                    } else {
+                        panelHTML += tempDiv.innerHTML;
+                    }
                     return;
                 }
 
@@ -657,7 +713,7 @@
 
                     // TYPE 4
                     if (txt.match(/\[TECAI\s*TYPE\s*4\s*SET\s*\d+\]/i)) {
-                        let mod = line.replace(/\[TECAI\s*TYPE\s*4\s*SET\s*(\d+)\]/gi,
+                        let mod = txt.replace(/\[TECAI\s*TYPE\s*4\s*SET\s*(\d+)\]/gi,
                             (m, id) => `<span class="dropzone" data-set="${currentSection + "_" + id}"></span>`
                         );
                         panelHTML += `<p id="q${qNum}"><b>${qNum}.</b> ${mod}</p>`;
@@ -756,19 +812,24 @@
 
                     // TYPE 8 (Multi-Select with Range Numbering)
                     if (txt.match(/\[TECAI\s*TYPE\s*8\]/i)) {
+                        // 1. Peek ahead to find the limit in the OPTIONS tag
                         let limit = 2; // Default
                         for (let i = content.indexOf(p); i < content.length; i++) {
-                            let peek = content[i].text;
-                            let m = peek.match(/\[TECAI\s*TYPE\s*8\.(\d+)\s*OPTIONS\]/i);
-                            if (m) {
-                                limit = parseInt(m[1]);
-                                break;
+                            if (content[i] && content[i].text) {
+                                let peek = content[i].text;
+                                let m = peek.match(/\[TECAI\s*TYPE\s*8\.(\d+)\s*OPTIONS\]/i);
+                                if (m) {
+                                    limit = parseInt(m[1]);
+                                    break;
+                                }
                             }
                         }
 
+                        // 2. Format the range label (e.g., 41–42)
                         let qRange = (limit > 1) ? `${qNum}–${qNum + limit - 1}` : `${qNum}`;
                         let clean = txt.replace(/\[TECAI\s*TYPE\s*8\]/i, "");
 
+                        // 3. Add 'type-8-group' class and data-limit for the Navigation function to find
                         panelHTML += `<div id="q${qNum}" class="question-container type-8-group" data-limit="${limit}">
                     <b>${qRange}.</b> ${clean}<br>`;
                         return;
@@ -788,8 +849,48 @@
                         });
 
                         panelHTML += `</div>`;
-                        qNum += limit;
+                        qNum += limit; // Increment counter by the number of questions covered
                         return;
+                    }
+
+                    //Type 9 - Matrix
+                    if (txt.includes("[TECAI TYPE 9 HEADERS]")) {
+                        let rawHeaders = txt.split(']')[1] || "";
+                        type9Headers = rawHeaders.split('/').map(h => h.trim());
+
+                        // Render the Header Bar
+                        let headerHtml = `
+        <div class="type-9-header-row">
+            <div class="type-9-statement-head">Questions</div>
+            <div class="type-9-options-head">
+                ${type9Headers.map(h => `<div style="flex:1; text-align:center;">${h}</div>`).join('')}
+            </div>
+        </div>`;
+
+                        panelHTML += headerHtml;
+                        return; // ❌ CRITICAL: Stops the loop so this line doesn't print again
+                    }
+
+                    // 2. Detect and render Type 9 Question Row
+                    if (txt.includes("[TECAI TYPE 9]")) {
+                        let currentQ = qNum++;
+                        // Remove the tag so it doesn't show in the question text
+                        let cleanStatement = txt.replace(/\[TECAI\s*TYPE\s*9\]/gi, '').trim();
+
+                        let rowHtml = `
+        <div class="type-9-row" id="q${currentQ}">
+            <div class="type-9-statement"><b>${currentQ}.</b> ${cleanStatement}</div>
+            <div class="type-9-options">
+                ${type9Headers.map(header => `
+                    <div style="flex:1; text-align:center;">
+                        <input type="radio" name="q${currentQ}" value="${header}" title="${header}">
+                    </div>
+                `).join('')}
+            </div>
+        </div>`;
+
+                        panelHTML += rowHtml;
+                        return; // ❌ CRITICAL: Stops the loop so the "default" text doesn't print below the grid
                     }
 
                     panelHTML += `<p>${line}</p>`;
@@ -798,7 +899,9 @@
                     panelHTML += `<p>${p.html}</p>`;
                 }
             });
+
             document.getElementById("mainPanel").innerHTML = panelHTML;
+
             createNav(qNum - 1);
         }
 
@@ -858,6 +961,7 @@
                     let limit = parseInt(container.getAttribute("data-limit") || "1");
                     if (limit > 1) {
                         label = `${i}–${i + limit - 1}`;
+                        // Skip the hidden numbers in the range
                         for (let j = 1; j < limit; j++) {
                             processedQs.add(i + j);
                         }
@@ -879,10 +983,12 @@
 
             checkboxes.forEach(cb => {
                 if (checkedCount >= max) {
+                    // If limit reached, disable all UNCHECKED boxes
                     if (!cb.checked) {
                         cb.disabled = true;
                     }
                 } else {
+                    // If below limit, ensure all boxes are enabled
                     cb.disabled = false;
                 }
             });
@@ -911,7 +1017,7 @@ Self Assessment:
             a.click();
         }
 
-        //collect answers from the form
+        // Collect answers from all question types
         function collectAnswers() {
             let data = [];
 
@@ -920,6 +1026,11 @@ Self Assessment:
 
                 // If the question container doesn't exist, skip it 
                 if (!qDiv) {
+                    let directInput = document.querySelector(`input[name="q${i}"]`);
+                    if (directInput) {
+                        data.push(`${i}. ${directInput.value.trim() || " "}`);
+                        continue;
+                    }
                     data.push(`${i}. `);
                     continue;
                 }
@@ -971,28 +1082,58 @@ Self Assessment:
                 // }
 
                 // 5. Check for Text Inputs (Type 3, 6, and individual input boxes)
-                let textInputs = qDiv.querySelectorAll('input[type="text"], input:not([type])');
-                if (textInputs.length > 0) {
-                    textInputs.forEach(inp => {
-                        // Determine the correct question number
-                        // If Type 6, the input name attribute (e.g., "q43") is the most accurate source
-                        let nameMatch = inp.name.match(/q(\d+)/);
-                        let currentNum = nameMatch ? nameMatch[1] : i;
+                let textInputs = [];
 
-                        data.push(`${currentNum}. ${inp.value.trim() || " "}`);
-                    });
-
-                    // If there were multiple inputs (Type 6), we must update the main loop counter 'i'
-                    // to the highest question number processed so we don't duplicate them.
-                    if (textInputs.length > 1) {
-                        let lastInpName = textInputs[textInputs.length - 1].name.match(/q(\d+)/);
-                        if (lastInpName) {
-                            i = parseInt(lastInpName[1]);
+                if (qDiv) {
+                    // 🔍 SEARCH WITHIN qDiv
+                    // We only want inputs that are NOT radio/checkbox, OR are radio/checkbox AND are checked
+                    textInputs = Array.from(qDiv.querySelectorAll('input')).filter(inp => {
+                        if (inp.type === 'radio' || inp.type === 'checkbox') {
+                            return inp.checked; // Only include if selected
                         }
+                        return true; // Include all text/other inputs
+                    });
+                }
+
+                // FALLBACK: Search globally if qDiv is missing or yielded no results (e.g. inside tables)
+                if (textInputs.length === 0) {
+                    let namedInputs = Array.from(document.querySelectorAll(`input[name="q${i}"], input[name^="q${i}_"]`));
+                    textInputs = namedInputs.filter(inp => {
+                        if (inp.type === 'radio' || inp.type === 'checkbox') {
+                            return inp.checked;
+                        }
+                        return true;
+                    });
+                }
+
+                if (textInputs.length > 0) {
+                    // Separate Checkboxes from Text/Other inputs
+                    let checkboxes = textInputs.filter(inp => inp.type === 'checkbox');
+                    let otherInputs = textInputs.filter(inp => inp.type !== 'checkbox');
+
+                    // 1. Handle Checkboxes (Store as "41. A | B")
+                    if (checkboxes.length > 0) {
+                        let vals = checkboxes.map(c => c.value.trim());
+                        data.push(`${i}. ${vals.join(" | ") || " "}`);
+                    }
+
+                    // 2. Handle Text Inputs (Store as separate lines for Type 6)
+                    if (otherInputs.length > 0) {
+                        otherInputs.forEach(inp => {
+                            let nameMatch = inp.name.match(/q(\d+)/);
+                            let currentNum = nameMatch ? nameMatch[1] : i;
+                            let val = inp.value.trim() || " ";
+                            data.push(`${currentNum}. ${val}`);
+                        });
+                    }
+
+                    // Update main counter 'i' to jump past multi-question blocks
+                    let lastInpName = textInputs[textInputs.length - 1].name.match(/q(\d+)/);
+                    if (lastInpName && parseInt(lastInpName[1]) > i) {
+                        i = parseInt(lastInpName[1]);
                     }
                     continue;
                 }
-
                 // 6. Default fallback for unanswered questions 
                 data.push(`${i}. `);
             }
