@@ -160,7 +160,7 @@ export function ListeningExam({
                     height: "0",
                     width: "0",
                     videoId: videoId,
-                    playerVars: { 'autoplay': 1, 'controls': 0, 'disablekb': 1, 'origin': window.location.origin },
+                    playerVars: { 'autoplay': 1, 'controls': 0, 'disablekb': 1, 'origin': 'https://www.thesillysyllabus.com' },
                     events: {
                         'onReady': function (event) {
                             event.target.playVideo();
