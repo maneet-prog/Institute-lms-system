@@ -109,6 +109,7 @@ export function ReadingExam({
         let totalSeconds = initialSeconds;
         let timerInterval;
         let sectionTracker = 0;
+        let type9Headers = [];
 
         function formatTime(total) {
             let m = Math.floor(total / 60);

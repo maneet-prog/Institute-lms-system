@@ -138,6 +138,7 @@ export function ListeningExam({
         let type4Answers = {};
         let renderedSets = new Set();
         let totalSeconds = initialSeconds;
+        let type9Headers = [];
         let timerInterval;
         let ytPlayer;
 
