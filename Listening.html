@@ -120,7 +120,7 @@
 
         .dropzone {
             display: inline-block;
-            min-width: 130px;
+            min-width: 100px;
             min-height: 28px;
             border-bottom: 2px solid #0b1f3a;
             margin: 0 5px;
@@ -165,6 +165,17 @@
 
         #hiddenAudio {
             display: none;
+        }
+
+        body {
+            -webkit-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        img {
+            -webkit-user-drag: none;
+            user-drag: none;
         }
     </style>
 </head>
@@ -404,7 +415,7 @@
         }
 
         async function renderTable(tblNode, zip, sectionId) {
-            let html = "<table border='1' style='border-collapse:collapse;width:100%'>";
+            let html = "<table style='border:none;border-collapse:collapse;width:100%'>";
 
             const rows = tblNode.getElementsByTagName("w:tr");
 
@@ -425,7 +436,7 @@
                         let fullText = "";
 
                         for (let t of texts) {
-                            fullText += t.textContent;
+                            fullText += t.textContent || "";
                         }
 
                         fullText = fullText.replace(/\s+/g, " ").trim();
@@ -728,7 +739,7 @@
                     }
 
                     let prevP = content[content.indexOf(p) - 1];
-                    if (prevP && prevP.text.match(/\[TECAI\s*TYPE\s*7\s*OPTIONS\]/i) && !txt.match("END")) {
+                    if (prevP && prevP.text && prevP.text.match(/\[TECAI\s*TYPE\s*7\s*OPTIONS\]/i) && !txt.match("END")) {
                         let options = txt.split("/").map(o => o.trim());
 
                         let selectHTML = `<select name="q${qNum}" style="margin-left:10px; padding:4px;">

@@ -57,13 +57,15 @@ export function ReadingExam({
         .right div[id^="q"] { background: white; padding: 10px; margin-bottom: 10px; border-radius: 6px; border: 1px solid #e0e0e0; }
         .drag-container { border: 2px dashed #bbb; padding: 10px; margin: 10px 0; min-height: 40px; border-radius: 6px; }
         .draggable { display: inline-block; padding: 5px 10px; margin: 5px; background: #0b1f3a; color: white; border-radius: 5px; cursor: grab; }
-        .dropzone { display: inline-block; min-width: 120px; min-height: 25px; border-bottom: 2px solid #000; margin: 0 5px; }
+        .dropzone { display: inline-block; min-width: 100px; min-height: 25px; border-bottom: 2px solid #000; margin: 0 5px; }
         .question-nav { position: fixed; bottom: 0; width: 100%; height: 60px; background: white; border-top: 1px solid #ddd; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; padding: 5px; overflow-x: auto; }
         .question-nav button { min-width: 35px; height: 35px; border-radius: 6px; background: #edf1f7; color: #333; font-weight: 600; }
         .question-nav button:hover { background: #0b1f3a; color: white; }
         #loadingOverlay { position: fixed; top: 115px; left: 0; width: 100%; height: calc(100% - 175px); background: rgba(255,255,255,0.9); display: flex; justify-content: center; align-items: center; z-index: 2000; font-size: 18px; color: #333; }
         input[type="checkbox"]:disabled { opacity: 0.5; cursor: not-allowed; }
         .type-8-group { padding: 10px; background: #f0f4f8; border-radius: 5px; margin-bottom: 15px; }
+        body { -webkit-user-select: none; -ms-user-select: none; user-select: none; }
+        img { -webkit-user-drag: none; user-drag: none; }
     </style>
 </head>
 <body>
@@ -136,6 +138,7 @@ export function ReadingExam({
             const doc = parser.parseFromString(xml, "application/xml");
             const body = doc.getElementsByTagName("w:body")[0].childNodes;
             let content = [];
+            let sectionTracker = 0;
 
             const relsXml = zip.file("word/_rels/document.xml.rels") ? await zip.file("word/_rels/document.xml.rels").async("text") : null;
             let relationships = [];
@@ -173,7 +176,7 @@ export function ReadingExam({
                     content.push({ type: "p", text: trimmedText, html });
                 }
                 if (node.nodeName === "w:tbl") {
-                    const tableHTML = await renderTable(node, zip, relationships);
+                    const tableHTML = await renderTable(node, zip, sectionTracker);
                     content.push({ type: "table", html: tableHTML });
                 }
             }
@@ -199,7 +202,7 @@ export function ReadingExam({
         }
 
         async function renderTable(tblNode, zip, relationships) {
-            let html = "<table border='1' style='border-collapse:collapse;width:100%'>";
+            let html = "<table style='border:none;border-collapse:collapse;width:100%'>";
             const rows = tblNode.getElementsByTagName("w:tr");
             for (let row of rows) {
                 html += "<tr>";
@@ -353,7 +356,7 @@ export function ReadingExam({
                         qNum++; return;
                     }
                     if (txt.match(/\\[TECAI\\s*TYPE\\s*4\\s*SET\\s*\\d+\\]/i)) {
-                        let mod = line.replace(/\\[TECAI\\s*TYPE\\s*4\\s*SET\\s*(\\d+)\\]/gi, (m, id) => \`<span class="dropzone" data-set="\${currentSection + "_" + id}"></span>\`);
+                        let mod = txt.replace(/\\[TECAI\\s*TYPE\\s*4\\s*SET\\s*(\\d+)\\]/gi, (m, id) => \`<span class="dropzone" data-set="\${currentSection + "_" + id}"></span>\`);
                         rightHTML += \`<p id="q\${qNum}"><b>\${qNum}.</b> \${mod}</p>\`;
                         qNum++; return;
                     }
@@ -403,7 +406,7 @@ export function ReadingExam({
                     }
 
                     let prevP = content[content.indexOf(p)-1];
-                    if (prevP && prevP.text.match(/\\[TECAI\\s*TYPE\\s*7\\s*OPTIONS\\]/i) && !txt.match("END")) {
+                    if (prevP && prevP.text && prevP.text.match(/\\[TECAI\\s*TYPE\\s*7\\s*OPTIONS\\]/i) && !txt.match("END")) {
                         let options = txt.split("/").map(o => o.trim());
 
                         let selectHTML = \`<select name = "q\${qNum}" style = "margin-left:10px; padding:4px;" >

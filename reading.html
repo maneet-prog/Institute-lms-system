@@ -295,6 +295,7 @@
             const body = doc.getElementsByTagName("w:body")[0].childNodes;
 
             let content = [];
+            let sectionTracker = 0;
 
             for (let node of body) {
 
@@ -660,7 +661,7 @@
                     }
 
                     let prevP = content[content.indexOf(p) - 1];
-                    if (prevP && prevP.text.match(/\[TECAI\s*TYPE\s*7\s*OPTIONS\]/i) && !txt.match("END")) {
+                    if (prevP && prevP.text && prevP.text.match(/\[TECAI\s*TYPE\s*7\s*OPTIONS\]/i) && !txt.match("END")) {
                         let options = txt.split("/").map(o => o.trim());
 
                         let selectHTML = `<select name="q${qNum}" style="margin-left:10px; padding:4px;">

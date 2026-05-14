@@ -74,7 +74,7 @@ export function ListeningExam({
         .main-content div[id^="q"] { background: #fff; padding: 15px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #eee; transition: border 0.3s; }
         .drag-container { border: 2px dashed #bbb; padding: 10px; margin: 10px 0; min-height: 50px; border-radius: 6px; background: #fafafa; }
         .draggable { display: inline-block; padding: 6px 12px; margin: 5px; background: #0b1f3a; color: white; border-radius: 4px; cursor: grab; }
-        .dropzone { display: inline-block; min-width: 130px; min-height: 28px; border-bottom: 2px solid #0b1f3a; margin: 0 5px; vertical-align: middle; background: #f0f4f8; }
+        .dropzone { display: inline-block; min-width: 100px; min-height: 28px; border-bottom: 2px solid #0b1f3a; margin: 0 5px; vertical-align: middle; background: #f0f4f8; }
         .question-nav { position: fixed; bottom: 0; width: 100%; height: 60px; background: white; border-top: 1px solid #ddd; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; padding: 5px; overflow-x: auto; }
         .question-nav button { min-width: 35px; height: 35px; border-radius: 6px; background: #edf1f7; color: #333; font-weight: 600; }
         .question-nav button:hover { background: #0b1f3a; color: white; }
@@ -83,6 +83,8 @@ export function ListeningExam({
         #loadingOverlay { position: fixed; top: 115px; left: 0; width: 100%; height: calc(100% - 175px); background: rgba(255,255,255,0.9); display: flex; justify-content: center; align-items: center; z-index: 2000; font-size: 18px; color: #333; }
         input[type="checkbox"]:disabled { opacity: 0.5; cursor: not-allowed; }
         .type-8-group { padding: 10px; background: #f0f4f8; border-radius: 5px; margin-bottom: 15px; }
+        body { -webkit-user-select: none; -ms-user-select: none; user-select: none; }
+        img { -webkit-user-drag: none; user-drag: none; }
     </style>
 </head>
 <body class="${escapeHtml(presentationVariant)}">
@@ -202,7 +204,6 @@ export function ListeningExam({
                 process(content);
 
                 const audio = document.getElementById("hiddenAudio");
-                console.log("Audio source:", youtubeLink);
                 if (youtubeLink) {
                     playYouTube(youtubeLink);
                     startTimer(null);
@@ -285,7 +286,7 @@ export function ListeningExam({
         }
 
         async function renderTable(tblNode, zip, relationships) {
-            let html = "<table border='1' style='border-collapse:collapse;width:100%'>";
+            let html = "<table style='border:none;border-collapse:collapse;width:100%'>";
             const rows = tblNode.getElementsByTagName("w:tr");
             for (let row of rows) {
                 html += "<tr>";
@@ -434,7 +435,7 @@ export function ListeningExam({
                         return;
                     }
                     if (txt.match(/\\[TECAI\\s*TYPE\\s*4\\s*SET\\s*\\d+\\]/i)) {
-                        let mod = line.replace(/\\[TECAI\\s*TYPE\\s*4\\s*SET\\s*(\\d+)\\]/gi, function (m, id) {
+                        let mod = txt.replace(/\\[TECAI\\s*TYPE\\s*4\\s*SET\\s*(\\d+)\\]/gi, function (m, id) {
                             return \`<span class="dropzone" data-set="\${currentSection}_\${id}"></span>\`;
                         });
                         panelHTML += \`<p id="q\${qNum}"><b>\${qNum}.</b> \${mod}</p>\`;
@@ -706,6 +707,7 @@ export function ListeningExam({
             srcDoc={htmlContent}
             style={{ width: "100vw", height: "100vh", border: "none" }}
             title="TECAI Listening Exam"
+            allow="autoplay; encrypted-media"
         />
     );
 }
