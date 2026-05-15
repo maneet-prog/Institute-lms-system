@@ -1,9 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { FolderOpen, Pencil, Trash2 } from "lucide-react";
 
-import { useDeleteModuleMutation, useUpdateModuleMutation } from "@/hooks/useLmsQueries";
+import {
+  useCreateModuleSubcategoryMutation,
+  useDeleteModuleMutation,
+  useDeleteModuleSubcategoryMutation,
+  useUpdateModuleMutation,
+  useUpdateModuleSubcategoryMutation
+} from "@/hooks/useLmsQueries";
 import { Course, Module, SubCourse } from "@/types/lms";
 import { DataTable } from "@/components/tables/DataTable";
 import { Button } from "@/components/ui/Button";
@@ -35,7 +41,13 @@ export function ModuleCatalogTable({
 }: Props) {
   const updateModule = useUpdateModuleMutation();
   const deleteModule = useDeleteModuleMutation();
+  const createModuleSubcategory = useCreateModuleSubcategoryMutation();
+  const updateModuleSubcategory = useUpdateModuleSubcategoryMutation();
+  const deleteModuleSubcategory = useDeleteModuleSubcategoryMutation();
   const [selectedModule, setSelectedModule] = useState<Module | null>(null);
+  const [subcategoryModuleId, setSubcategoryModuleId] = useState<string | null>(null);
+  const [subcategoryForm, setSubcategoryForm] = useState({ name: "" });
+  const [editingSubcategoryId, setEditingSubcategoryId] = useState<string | null>(null);
   const [form, setForm] = useState({
     course_id: defaultCourseId ?? "",
     subcourse_id: defaultSubcourseId ?? "",
@@ -56,6 +68,10 @@ export function ModuleCatalogTable({
     ],
     [form.course_id, subcourses]
   );
+  const subcategoryModule = useMemo(
+    () => modules.find((module) => module.module_id === subcategoryModuleId) ?? null,
+    [modules, subcategoryModuleId]
+  );
 
   const openEdit = (module: Module) => {
     setSelectedModule(module);
@@ -67,6 +83,11 @@ export function ModuleCatalogTable({
     });
   };
 
+  const resetSubcategoryEditor = () => {
+    setSubcategoryForm({ name: "" });
+    setEditingSubcategoryId(null);
+  };
+
   return (
     <>
       <DataTable
@@ -76,6 +97,11 @@ export function ModuleCatalogTable({
         columns={[
           { key: "module_name", header: "Module" },
           { key: "exam_type", header: "Exam Type", render: (row) => row.exam_type },
+          {
+            key: "module_subcategories",
+            header: "Subcategories",
+            render: (row) => row.module_subcategories.map((item) => item.name).join(", ")
+          },
           {
             key: "subcourse_name",
             header: "SubCourse",
@@ -91,6 +117,14 @@ export function ModuleCatalogTable({
             render: (row) =>
               canManage ? (
                 <div className="flex gap-2">
+                  <IconButton
+                    icon={<FolderOpen className="h-4 w-4" />}
+                    label={`Manage subcategories for ${row.module_name}`}
+                    onClick={() => {
+                      setSubcategoryModuleId(row.module_id);
+                      resetSubcategoryEditor();
+                    }}
+                  />
                   <IconButton icon={<Pencil className="h-4 w-4" />} label={`Edit ${row.module_name}`} onClick={() => openEdit(row)} />
                   <IconButton
                     variant="danger"
@@ -162,6 +196,129 @@ export function ModuleCatalogTable({
             <Button variant="secondary" onClick={() => setSelectedModule(null)}>
               Cancel
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        title={subcategoryModule ? `Manage ${subcategoryModule.module_name} Subcategories` : "Manage Module Subcategories"}
+        open={Boolean(subcategoryModule)}
+        onClose={() => {
+          setSubcategoryModuleId(null);
+          resetSubcategoryEditor();
+        }}
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+            Keep subcategories tied to this module only. The default <span className="font-semibold text-slate-900">general</span> option is always available and cannot be edited or deleted.
+          </div>
+
+          <div className="space-y-3">
+            {(subcategoryModule?.module_subcategories || []).map((subcategory) => {
+              const isDefault = subcategory.subcategory_id === "general";
+              return (
+                <div
+                  key={subcategory.subcategory_id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{subcategory.name}</p>
+                    <p className="text-xs text-slate-500">{isDefault ? "Default fallback" : "Custom module subcategory"}</p>
+                  </div>
+                  {isDefault ? (
+                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Locked</span>
+                  ) : (
+                    <div className="flex gap-2">
+                      <IconButton
+                        icon={<Pencil className="h-4 w-4" />}
+                        label={`Edit ${subcategory.name}`}
+                        onClick={() => {
+                          setEditingSubcategoryId(subcategory.subcategory_id);
+                          setSubcategoryForm({ name: subcategory.name });
+                        }}
+                      />
+                      <IconButton
+                        variant="danger"
+                        icon={<Trash2 className="h-4 w-4" />}
+                        label={`Delete ${subcategory.name}`}
+                        disabled={deleteModuleSubcategory.isPending}
+                        onClick={() => {
+                          if (!subcategoryModule) return;
+                          if (window.confirm(`Delete subcategory "${subcategory.name}"?`)) {
+                            deleteModuleSubcategory.mutate({
+                              moduleId: subcategoryModule.module_id,
+                              subcategoryId: subcategory.subcategory_id
+                            });
+                            if (editingSubcategoryId === subcategory.subcategory_id) {
+                              resetSubcategoryEditor();
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <Input
+              label={editingSubcategoryId ? "Update Subcategory Name" : "New Subcategory Name"}
+              value={subcategoryForm.name}
+              onChange={(event) => setSubcategoryForm({ name: event.target.value })}
+            />
+            <div className="flex gap-2">
+              <Button
+                disabled={
+                  !subcategoryModule ||
+                  !subcategoryForm.name.trim() ||
+                  createModuleSubcategory.isPending ||
+                  updateModuleSubcategory.isPending
+                }
+                onClick={() => {
+                  if (!subcategoryModule || !subcategoryForm.name.trim()) return;
+                  if (editingSubcategoryId) {
+                    updateModuleSubcategory.mutate(
+                      {
+                        moduleId: subcategoryModule.module_id,
+                        subcategoryId: editingSubcategoryId,
+                        payload: {
+                          name: subcategoryForm.name.trim(),
+                          institute_id: instituteId
+                        }
+                      },
+                      { onSuccess: resetSubcategoryEditor }
+                    );
+                    return;
+                  }
+
+                  createModuleSubcategory.mutate(
+                    {
+                      moduleId: subcategoryModule.module_id,
+                      payload: {
+                        name: subcategoryForm.name.trim(),
+                        institute_id: instituteId
+                      }
+                    },
+                    { onSuccess: resetSubcategoryEditor }
+                  );
+                }}
+              >
+                {editingSubcategoryId
+                  ? updateModuleSubcategory.isPending
+                    ? "Saving..."
+                    : "Update Subcategory"
+                  : createModuleSubcategory.isPending
+                    ? "Saving..."
+                    : "Add Subcategory"}
+              </Button>
+              {editingSubcategoryId ? (
+                <Button variant="secondary" onClick={resetSubcategoryEditor}>
+                  Cancel Edit
+                </Button>
+              ) : null}
+            </div>
           </div>
         </div>
       </Modal>

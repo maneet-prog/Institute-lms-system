@@ -59,3 +59,24 @@ exports.removeModule = asyncHandler(async (req, res) => {
   await service.deleteModule(req.params.moduleId, req.tenant, req.user);
   res.json({ message: "Module deleted successfully." });
 });
+
+exports.addModuleSubcategory = asyncHandler(async (req, res) =>
+  res.status(201).json(await service.createModuleSubcategory(req.params.moduleId, req.body, req.tenant, req.user))
+);
+
+exports.editModuleSubcategory = asyncHandler(async (req, res) =>
+  res.json(
+    await service.updateModuleSubcategory(
+      req.params.moduleId,
+      req.params.subcategoryId,
+      req.body,
+      req.tenant,
+      req.user
+    )
+  )
+);
+
+exports.removeModuleSubcategory = asyncHandler(async (req, res) => {
+  await service.deleteModuleSubcategory(req.params.moduleId, req.params.subcategoryId, req.tenant, req.user);
+  res.json({ message: "Module subcategory deleted successfully." });
+});

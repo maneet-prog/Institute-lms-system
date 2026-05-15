@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 
 import { ContentRenderer } from "@/components/content/ContentRenderer";
 import { StudentContentSubmissionPanel } from "@/components/content/StudentContentSubmissionPanel";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { useStudentBatchWorkspaceQuery } from "@/hooks/useLmsQueries";
 
@@ -15,10 +16,37 @@ function formatScore(value: number | null | undefined, maxScore: number) {
 export default function StudentModuleDetailPage() {
   const params = useParams<{ batchId: string; moduleId: string }>();
   const { data, isLoading } = useStudentBatchWorkspaceQuery(params.batchId);
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string>("all");
 
   const moduleDetail = useMemo(
     () => data?.modules.find((entry) => entry.module_id === params.moduleId) ?? null,
     [data, params.moduleId]
+  );
+  const subcategoryFilters = useMemo(() => {
+    const seen = new Set<string>();
+    const items = (moduleDetail?.content || [])
+      .map((item) => ({
+        id: item.module_subcategory_id || "general",
+        name: item.module_subcategory_name || "general"
+      }))
+      .filter((item) => {
+        if (seen.has(item.id)) {
+          return false;
+        }
+        seen.add(item.id);
+        return true;
+      });
+
+    return [{ id: "all", name: "All" }, ...items];
+  }, [moduleDetail]);
+  const filteredContent = useMemo(
+    () =>
+      (moduleDetail?.content || []).filter((item) =>
+        selectedSubcategory === "all"
+          ? true
+          : (item.module_subcategory_id || "general") === selectedSubcategory
+      ),
+    [moduleDetail, selectedSubcategory]
   );
 
   if (isLoading) {
@@ -31,7 +59,7 @@ export default function StudentModuleDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Card className="border-brand-100 bg-gradient-to-br from-brand-50 via-white to-white">
+      {/* <Card className="border-brand-100 bg-gradient-to-br from-brand-50 via-white to-white">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-500">Module Detail</p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-900">{moduleDetail.module_name}</h1>
         <p className="mt-2 text-sm text-slate-600">
@@ -39,26 +67,64 @@ export default function StudentModuleDetailPage() {
         </p>
       </Card>
 
+      <Card>
+        <h2 className="text-lg font-semibold text-slate-900">Module Subcategories</h2>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {subcategoryFilters.map((filter) => (
+            <Button
+              key={filter.id}
+              variant={selectedSubcategory === filter.id ? "primary" : "secondary"}
+              onClick={() => setSelectedSubcategory(filter.id)}
+            >
+              {filter.name}
+            </Button>
+          ))}
+        </div>
+      </Card> */}
+
+      <Card className="border-brand-100 bg-gradient-to-br from-brand-50 via-white to-white">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-500">Module Detail</p>
+          <h1 className="mt-2 text-2xl font-semibold text-slate-900">{moduleDetail.module_name}</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            {data.batch_name} | {data.course_name} | {data.subcourse_name}
+          </p>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {subcategoryFilters.map((filter) => (
+            <Button
+              key={filter.id}
+              variant={selectedSubcategory === filter.id ? "primary" : "secondary"}
+              onClick={() => setSelectedSubcategory(filter.id)}
+            >
+              {filter.name}
+            </Button>
+          ))}
+        </div>
+      </Card>
+
       <div className="space-y-4">
-        {moduleDetail.content.map((item, index) => (
+        {!filteredContent.length ? (
+          <Card>
+            <p className="text-sm text-slate-600">No content is available for the selected subcategory.</p>
+          </Card>
+        ) : null}
+        {filteredContent.map((item, index) => (
           <details key={item.content_id} open={index === 0} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <summary className="cursor-pointer list-none">
-              {(() => {
-                const isDynamicExam =
-                  item.type === "quiz" &&
-                  (item.quiz?.renderer?.kind === "tecai_reading" || item.quiz?.renderer?.kind === "tecai_writing");
-
-                return (
-                  <>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-lg font-semibold text-slate-900">{item.title}</p>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {item.type} | {item.category} | {item.duration} min
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {/* {isDynamicExam ? (
+              <>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-semibold text-slate-900">{item.title}</p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {item.type} | {item.category} | {item.duration} min
+                    </p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.18em] text-brand-600">
+                      {(item.module_subcategory_name || "general").toUpperCase()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {/* {isDynamicExam ? (
                     <AppLink
                       href={buildCourseExamHref(item.content_id)}
                       className="rounded-md border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -66,14 +132,12 @@ export default function StudentModuleDetailPage() {
                       Open Exam
                     </AppLink>
                   ) : null} */}
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                    {item.completed ? "Completed" : item.submission ? "Submitted" : "Open Content"}
-                  </span>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                      {item.completed ? "Completed" : item.submission ? "Submitted" : "Open Content"}
+                    </span>
+                  </div>
                 </div>
-              </div>
-                  </>
-                );
-              })()}
+              </>
             </summary>
 
             <div className="mt-4 space-y-4">

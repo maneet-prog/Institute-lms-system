@@ -66,6 +66,12 @@ export interface Module {
   institute_id: string;
   module_name: string;
   exam_type: "reading" | "writing" | "listening" | "speaking" | "general";
+  module_subcategories: Array<{
+    subcategory_id: string;
+    name: string;
+    active: boolean;
+    is_default?: boolean;
+  }>;
   active: boolean;
 }
 
@@ -177,6 +183,8 @@ export interface Content {
   visibility_scope?: "batch" | "selected_students";
   assigned_student_ids?: string[];
   hidden_student_ids?: string[];
+  module_subcategory_id?: string;
+  module_subcategory_name?: string;
   completed?: boolean;
   exam?: {
     exam_type_id?: string | null;

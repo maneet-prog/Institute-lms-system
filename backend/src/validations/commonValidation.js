@@ -34,6 +34,16 @@ exports.moduleUpdateSchema = Joi.object({
   active: Joi.boolean().default(true)
 });
 
+exports.moduleSubcategorySchema = Joi.object({
+  name: Joi.string().trim().required(),
+  institute_id: Joi.string().optional()
+});
+
+exports.moduleSubcategoryUpdateSchema = Joi.object({
+  name: Joi.string().trim().required(),
+  institute_id: Joi.string().optional()
+});
+
 exports.batchSchema = Joi.object({
   course_id: Joi.string().required(),
   subcourse_id: Joi.string().required(),
@@ -74,6 +84,8 @@ exports.contentSchema = Joi.object({
   timer_seconds: Joi.number().integer().min(0).allow("", null),
   exam_parts: Joi.alternatives().try(Joi.string(), Joi.array()).allow("", null),
   exam_metadata: Joi.alternatives().try(Joi.string(), Joi.object()).allow("", null),
+  module_subcategory_id: Joi.string().allow("", null),
+  module_subcategory_name: Joi.string().allow("", null),
   visibility_scope: Joi.string().valid("batch", "selected_students").default("batch"),
   assigned_student_ids: Joi.alternatives().try(Joi.string(), Joi.array().items(Joi.string())).allow("", null),
   duration: Joi.number().integer().min(0).default(0),
@@ -105,6 +117,8 @@ exports.contentUpdateSchema = Joi.object({
   timer_seconds: Joi.number().integer().min(0).allow("", null),
   exam_parts: Joi.alternatives().try(Joi.string(), Joi.array()).allow("", null),
   exam_metadata: Joi.alternatives().try(Joi.string(), Joi.object()).allow("", null),
+  module_subcategory_id: Joi.string().allow("", null),
+  module_subcategory_name: Joi.string().allow("", null),
   visibility_scope: Joi.string().valid("batch", "selected_students").optional(),
   assigned_student_ids: Joi.alternatives().try(Joi.string(), Joi.array().items(Joi.string())).allow("", null),
   duration: Joi.number().integer().min(0),
@@ -143,6 +157,8 @@ exports.reusableContentSchema = Joi.object({
   timer_seconds: Joi.number().integer().min(0).allow("", null),
   exam_parts: Joi.alternatives().try(Joi.string(), Joi.array()).allow("", null),
   exam_metadata: Joi.alternatives().try(Joi.string(), Joi.object()).allow("", null),
+  module_subcategory_id: Joi.string().allow("", null),
+  module_subcategory_name: Joi.string().allow("", null),
   duration: Joi.number().integer().min(0).default(0),
   institute_id: Joi.string().optional()
 });
@@ -172,6 +188,8 @@ exports.reusableContentUpdateSchema = Joi.object({
   timer_seconds: Joi.number().integer().min(0).allow("", null),
   exam_parts: Joi.alternatives().try(Joi.string(), Joi.array()).allow("", null),
   exam_metadata: Joi.alternatives().try(Joi.string(), Joi.object()).allow("", null),
+  module_subcategory_id: Joi.string().allow("", null),
+  module_subcategory_name: Joi.string().allow("", null),
   duration: Joi.number().integer().min(0),
   institute_id: Joi.string().optional(),
   replace_file: Joi.boolean().default(false)
@@ -181,6 +199,8 @@ exports.reusableContentAssignSchema = Joi.object({
   batch_id: Joi.string().required(),
   visibility_scope: Joi.string().valid("batch", "selected_students").default("batch"),
   assigned_student_ids: Joi.alternatives().try(Joi.string(), Joi.array().items(Joi.string())).allow("", null),
+  module_subcategory_id: Joi.string().allow("", null),
+  module_subcategory_name: Joi.string().allow("", null),
   order_index: Joi.number().integer().min(0).allow("", null),
   title: Joi.string().allow("", null),
   institute_id: Joi.string().optional()

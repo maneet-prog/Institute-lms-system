@@ -3,7 +3,14 @@ const controller = require("../controllers/courseController");
 const validate = require("../middlewares/validateMiddleware");
 const { protect, allowRoles } = require("../middlewares/authMiddleware");
 const upload = require("../middlewares/uploadMiddleware");
-const { courseSchema, subcourseSchema, moduleSchema, moduleUpdateSchema } = require("../validations/commonValidation");
+const {
+  courseSchema,
+  subcourseSchema,
+  moduleSchema,
+  moduleUpdateSchema,
+  moduleSubcategorySchema,
+  moduleSubcategoryUpdateSchema
+} = require("../validations/commonValidation");
 
 const router = express.Router();
 
@@ -53,5 +60,25 @@ router.post("/modules", protect, allowRoles("super_admin", "institute_admin", "t
 router.get("/modules", protect, allowRoles("super_admin", "institute_admin", "teacher", "student"), controller.getModules);
 router.put("/modules/:moduleId", protect, allowRoles("super_admin", "institute_admin", "teacher"), validate(moduleUpdateSchema), controller.editModule);
 router.delete("/modules/:moduleId", protect, allowRoles("super_admin", "institute_admin", "teacher"), controller.removeModule);
+router.post(
+  "/modules/:moduleId/subcategories",
+  protect,
+  allowRoles("super_admin", "institute_admin"),
+  validate(moduleSubcategorySchema),
+  controller.addModuleSubcategory
+);
+router.put(
+  "/modules/:moduleId/subcategories/:subcategoryId",
+  protect,
+  allowRoles("super_admin", "institute_admin"),
+  validate(moduleSubcategoryUpdateSchema),
+  controller.editModuleSubcategory
+);
+router.delete(
+  "/modules/:moduleId/subcategories/:subcategoryId",
+  protect,
+  allowRoles("super_admin", "institute_admin"),
+  controller.removeModuleSubcategory
+);
 
 module.exports = router;

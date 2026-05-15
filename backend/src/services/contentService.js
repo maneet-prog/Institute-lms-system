@@ -149,6 +149,10 @@ const parseOptionalJson = (value, label) => {
 const ensureArray = (value) => (Array.isArray(value) ? value : []);
 
 const cloneValue = (value) => (value == null ? value : JSON.parse(JSON.stringify(value)));
+const GENERAL_MODULE_SUBCATEGORY = Object.freeze({
+  id: "general",
+  name: "general"
+});
 
 const inferModuleCategory = (moduleItem) => {
   const explicitType = moduleItem?.examType;
@@ -162,6 +166,49 @@ const inferModuleCategory = (moduleItem) => {
   if (normalized.includes("listening") || normalized.includes("listing")) return "listening";
   if (normalized.includes("speaking") || normalized.includes("spoken")) return "speaking";
   return "general";
+};
+
+const getAvailableModuleSubcategories = (moduleItem) => {
+  const rawItems = Array.isArray(moduleItem?.moduleSubcategories) ? moduleItem.moduleSubcategories : [];
+  const unique = new Map([[GENERAL_MODULE_SUBCATEGORY.id, { ...GENERAL_MODULE_SUBCATEGORY }]]);
+
+  rawItems.forEach((item) => {
+    const subcategoryId = String(item?.subcategoryId || "").trim();
+    const name = String(item?.name || "").trim();
+    if (!subcategoryId || !name || item?.active === false || subcategoryId === GENERAL_MODULE_SUBCATEGORY.id) {
+      return;
+    }
+    unique.set(subcategoryId, { id: subcategoryId, name });
+  });
+
+  return [...unique.values()];
+};
+
+const resolveModuleSubcategorySelection = (moduleItem, payload = {}, fallback = null) => {
+  const available = getAvailableModuleSubcategories(moduleItem);
+  const byId = new Map(available.map((item) => [item.id, item]));
+  const byName = new Map(available.map((item) => [item.name.toLowerCase(), item]));
+  const requestedId = payload.module_subcategory_id ? String(payload.module_subcategory_id).trim() : "";
+  const requestedName = payload.module_subcategory_name ? String(payload.module_subcategory_name).trim() : "";
+
+  if (requestedId || requestedName) {
+    const matched =
+      (requestedId ? byId.get(requestedId) : null) ||
+      (requestedName ? byName.get(requestedName.toLowerCase()) : null);
+    if (!matched) {
+      throw new AppError("Selected module subcategory is not available for this module.", 400);
+    }
+    return matched;
+  }
+
+  if (fallback?.id && byId.has(fallback.id)) {
+    return byId.get(fallback.id);
+  }
+  if (fallback?.name && byName.has(String(fallback.name).toLowerCase())) {
+    return byName.get(String(fallback.name).toLowerCase());
+  }
+
+  return byId.get(GENERAL_MODULE_SUBCATEGORY.id) || { ...GENERAL_MODULE_SUBCATEGORY };
 };
 
 const parseIdList = (value) => {
@@ -466,6 +513,7 @@ const createContent = async (payload, file, tenant, user) => {
     let quiz = null;
     let examProfile = null;
     const category = inferModuleCategory(moduleItem);
+    const selectedSubcategory = resolveModuleSubcategorySelection(moduleItem, payload);
     const rendererKind =
       payload.renderer_kind ||
       (category === "writing"
@@ -558,6 +606,8 @@ const createContent = async (payload, file, tenant, user) => {
       externalUrl: payload.external_url,
       orderIndex: payload.order_index,
       duration: payload.duration,
+      moduleSubcategoryId: selectedSubcategory.id,
+      moduleSubcategoryName: selectedSubcategory.name,
       fileUrl: upload?.fileUrl,
       storageKey: upload?.storageKey,
       visibilityScope: visibility.visibilityScope,
@@ -602,7 +652,7 @@ const listModuleContents = async (moduleId, batchId, tenant, currentUser) => {
     active: true
   };
 
-  const contents = await Content.find(query).sort({ orderIndex: 1, createdAt: 1, _id: 1 });
+  const contents = await Content.find(query).sort({ createdAt: -1, _id: -1 });
   const visibleContents = hasRole(currentUser, "student")
     ? contents.filter((content) => isContentVisibleToStudent(content, currentUser._id))
     : contents;
@@ -645,6 +695,10 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
   const nextType = payload.type ?? content.type;
   const nextDescription = payload.description ?? content.description;
   const nextCategory = inferModuleCategory(moduleItem);
+  const nextSubcategory = resolveModuleSubcategorySelection(moduleItem, payload, {
+    id: content.moduleSubcategoryId,
+    name: content.moduleSubcategoryName
+  });
   const visibility =
     payload.visibility_scope !== undefined || payload.assigned_student_ids !== undefined
       ? await resolveAssignedStudents({ payload, batch, instituteId })
@@ -783,6 +837,8 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
   content.externalUrl = nextExternalUrl;
   content.orderIndex = payload.order_index ?? content.orderIndex;
   content.duration = payload.duration ?? content.duration;
+  content.moduleSubcategoryId = nextSubcategory.id;
+  content.moduleSubcategoryName = nextSubcategory.name;
   content.fileUrl = nextFileUrl;
   content.storageKey = nextStorageKey;
   content.visibilityScope = visibility.visibilityScope;
@@ -915,6 +971,7 @@ const createReusableContent = async (payload, file, tenant, user) => {
     let quiz = null;
     let examProfile = null;
     const category = inferModuleCategory(moduleItem);
+    const selectedSubcategory = resolveModuleSubcategorySelection(moduleItem, payload);
     const rendererKind =
       payload.renderer_kind ||
       (category === "writing"
@@ -1007,6 +1064,8 @@ const createReusableContent = async (payload, file, tenant, user) => {
       externalUrl: payload.external_url,
       orderIndex: payload.order_index,
       duration: payload.duration,
+      moduleSubcategoryId: selectedSubcategory.id,
+      moduleSubcategoryName: selectedSubcategory.name,
       fileUrl: upload?.fileUrl,
       storageKey: upload?.storageKey,
       visibilityScope: "batch",
@@ -1043,7 +1102,7 @@ const listReusableContents = async (moduleId, tenant, currentUser) => {
     batchId: null,
     isReusableTemplate: true,
     active: true
-  }).sort({ orderIndex: 1, createdAt: 1, _id: 1 });
+  }).sort({ createdAt: -1, _id: -1 });
 
   return contents.map((content) => serializeContent(content, { includeQuizAnswers: true }));
 };
@@ -1080,6 +1139,10 @@ const updateReusableContent = async (id, payload, file, tenant, currentUser) => 
   const nextType = payload.type ?? content.type;
   const nextDescription = payload.description ?? content.description;
   const nextCategory = inferModuleCategory(moduleItem);
+  const nextSubcategory = resolveModuleSubcategorySelection(moduleItem, payload, {
+    id: content.moduleSubcategoryId,
+    name: content.moduleSubcategoryName
+  });
   const nextRendererKind =
     payload.renderer_kind ||
     content.profile?.exam?.rendererKind ||
@@ -1219,6 +1282,8 @@ const updateReusableContent = async (id, payload, file, tenant, currentUser) => 
   content.externalUrl = nextExternalUrl;
   content.orderIndex = payload.order_index ?? content.orderIndex;
   content.duration = payload.duration ?? content.duration;
+  content.moduleSubcategoryId = nextSubcategory.id;
+  content.moduleSubcategoryName = nextSubcategory.name;
   content.fileUrl = nextFileUrl;
   content.storageKey = nextStorageKey;
   content.profile.category = nextCategory;
@@ -1256,6 +1321,14 @@ const assignReusableContent = async (contentId, payload, tenant, currentUser) =>
   assertBatchModuleLink(batch, moduleItem);
 
   const visibility = await resolveAssignedStudents({ payload, batch, instituteId });
+  const selectedSubcategory = resolveModuleSubcategorySelection(
+    moduleItem,
+    payload,
+    {
+      id: template.moduleSubcategoryId,
+      name: template.moduleSubcategoryName
+    }
+  );
 
   const existing = await Content.findOne({
     batchId: batch._id,
@@ -1278,6 +1351,8 @@ const assignReusableContent = async (contentId, payload, tenant, currentUser) =>
     externalUrl: template.externalUrl,
     orderIndex: payload.order_index ?? template.orderIndex ?? 0,
     duration: template.duration ?? 0,
+    moduleSubcategoryId: selectedSubcategory.id,
+    moduleSubcategoryName: selectedSubcategory.name,
     fileUrl: template.fileUrl,
     storageKey: template.storageKey,
     visibilityScope: visibility.visibilityScope,

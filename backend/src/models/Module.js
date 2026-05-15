@@ -1,5 +1,14 @@
 const mongoose = require("mongoose");
 
+const moduleSubcategorySchema = new mongoose.Schema(
+  {
+    subcategoryId: { type: String, required: true, trim: true },
+    name: { type: String, required: true, trim: true },
+    active: { type: Boolean, default: true }
+  },
+  { _id: false }
+);
+
 const moduleSchema = new mongoose.Schema(
   {
     instituteId: {
@@ -25,6 +34,10 @@ const moduleSchema = new mongoose.Schema(
       type: String,
       enum: ["reading", "writing", "listening", "speaking", "general"],
       default: "general"
+    },
+    moduleSubcategories: {
+      type: [moduleSubcategorySchema],
+      default: []
     },
     active: { type: Boolean, default: true }
   },

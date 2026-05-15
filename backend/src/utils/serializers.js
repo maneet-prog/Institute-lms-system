@@ -48,6 +48,28 @@ const serializeSubcourse = (subcourse) => ({
   active: subcourse.active
 });
 
+const serializeModuleSubcategory = (subcategory) => ({
+  subcategory_id: subcategory?.subcategoryId || subcategory?.subcategory_id || "general",
+  name: subcategory?.name || "general",
+  active: subcategory?.active !== false,
+  is_default:
+    (subcategory?.subcategoryId || subcategory?.subcategory_id || "general") === "general"
+});
+
+const serializeModuleSubcategories = (subcategories = []) => {
+  const items = [{ subcategoryId: "general", name: "general", active: true }, ...subcategories];
+  const seen = new Set();
+  return items
+    .map(serializeModuleSubcategory)
+    .filter((item) => {
+      if (!item.active || seen.has(item.subcategory_id)) {
+        return false;
+      }
+      seen.add(item.subcategory_id);
+      return true;
+    });
+};
+
 const serializeModule = (module) => ({
   module_id: asId(module._id),
   course_id: asId(module.courseId),
@@ -55,6 +77,7 @@ const serializeModule = (module) => ({
   institute_id: asId(module.instituteId),
   module_name: module.moduleName,
   exam_type: module.examType ?? "general",
+  module_subcategories: serializeModuleSubcategories(module.moduleSubcategories || []),
   active: module.active
 });
 
@@ -132,6 +155,8 @@ const serializeContent = (content, options = {}) => ({
   visibility_scope: content.visibilityScope ?? "batch",
   assigned_student_ids: (content.assignedStudentIds || []).map(asId).filter(Boolean),
   hidden_student_ids: (content.hiddenStudentIds || []).map(asId).filter(Boolean),
+  module_subcategory_id: content.moduleSubcategoryId ?? "general",
+  module_subcategory_name: content.moduleSubcategoryName ?? "general",
   exam: serializeExamProfile(content.profile?.exam),
   quiz:
     content.profile?.quiz &&

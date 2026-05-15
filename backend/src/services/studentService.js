@@ -160,7 +160,7 @@ const getModulesContent = async (user, tenant) => {
         batchId: batch.batch_id,
         instituteId,
         active: true
-      }).sort({ orderIndex: 1, createdAt: 1, _id: 1 });
+      }).sort({ createdAt: -1, _id: -1 });
 
       const visibleContents = contents.filter((content) => isContentVisibleToStudent(content, user._id));
       if (!visibleContents.length) {
@@ -255,7 +255,7 @@ const getBatchWorkspace = async (batchId, category, user, tenant) => {
         batchId: batch.batch_id,
         moduleId: { $in: modules.map((moduleItem) => moduleItem._id) },
         active: true
-      }).sort({ orderIndex: 1, createdAt: 1, _id: 1 })
+      }).sort({ createdAt: -1, _id: -1 })
     : [];
   const visibleContents = contents.filter((content) => isContentVisibleToStudent(content, user._id));
   const progressRows = modules.length
@@ -389,7 +389,7 @@ const getDashboard = async (user, tenant) => {
         active: true
       })
         .select("moduleId batchId title duration type visibilityScope assignedStudentIds hiddenStudentIds")
-        .sort({ orderIndex: 1, createdAt: 1, _id: 1 })
+        .sort({ createdAt: -1, _id: -1 })
         .lean()
     : [];
   const visibleContents = contents.filter((content) => isContentVisibleToStudent(content, user._id));

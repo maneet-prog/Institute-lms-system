@@ -178,6 +178,37 @@ export async function updateModule(
   return data;
 }
 
+export async function createModuleSubcategory(
+  moduleId: string,
+  payload: {
+    name: string;
+    institute_id?: string;
+  }
+): Promise<Module> {
+  const { data } = await api.post<Module>(`/modules/${moduleId}/subcategories`, payload);
+  return data;
+}
+
+export async function updateModuleSubcategory(
+  moduleId: string,
+  subcategoryId: string,
+  payload: {
+    name: string;
+    institute_id?: string;
+  }
+): Promise<Module> {
+  const { data } = await api.put<Module>(`/modules/${moduleId}/subcategories/${subcategoryId}`, payload);
+  return data;
+}
+
+export async function deleteModuleSubcategory(
+  moduleId: string,
+  subcategoryId: string
+): Promise<MessageResponse> {
+  const { data } = await api.delete<MessageResponse>(`/modules/${moduleId}/subcategories/${subcategoryId}`);
+  return data;
+}
+
 export async function deleteModule(moduleId: string): Promise<MessageResponse> {
   const { data } = await api.delete<MessageResponse>(`/modules/${moduleId}`);
   return data;
@@ -204,6 +235,8 @@ function buildContentFormData(payload: {
   timer_seconds?: number;
   exam_parts?: string;
   exam_metadata?: string;
+  module_subcategory_id?: string;
+  module_subcategory_name?: string;
   visibility_scope?: "batch" | "selected_students";
   assigned_student_ids?: string[];
 }) {
@@ -247,6 +280,8 @@ export async function addContent(payload: {
   timer_seconds?: number;
   exam_parts?: string;
   exam_metadata?: string;
+  module_subcategory_id?: string;
+  module_subcategory_name?: string;
   visibility_scope?: "batch" | "selected_students";
   assigned_student_ids?: string[];
   file?: File | null;
@@ -273,6 +308,8 @@ export async function addReusableContent(payload: {
   timer_seconds?: number;
   exam_parts?: string;
   exam_metadata?: string;
+  module_subcategory_id?: string;
+  module_subcategory_name?: string;
   file?: File | null;
 }): Promise<Content> {
   const { data } = await api.post<Content>("/content-library", buildContentFormData(payload));
@@ -343,6 +380,8 @@ export async function updateContent(
     timer_seconds?: number;
     exam_parts?: string;
     exam_metadata?: string;
+    module_subcategory_id?: string;
+    module_subcategory_name?: string;
     visibility_scope?: "batch" | "selected_students";
     assigned_student_ids?: string[];
     file?: File | null;
@@ -385,6 +424,8 @@ export async function updateReusableContent(
     timer_seconds?: number;
     exam_parts?: string;
     exam_metadata?: string;
+    module_subcategory_id?: string;
+    module_subcategory_name?: string;
     file?: File | null;
   }
 ): Promise<Content> {
@@ -403,6 +444,8 @@ export async function assignReusableContentToBatch(
     batch_id: string;
     visibility_scope?: "batch" | "selected_students";
     assigned_student_ids?: string[];
+    module_subcategory_id?: string;
+    module_subcategory_name?: string;
     order_index?: number;
     title?: string;
     institute_id?: string;

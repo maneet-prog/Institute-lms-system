@@ -107,7 +107,7 @@ export function CourseManagementWorkspace({ badge, title, description }: Props) 
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand-500">Selected Course</p>
               <h2 className="mt-2 text-xl font-semibold text-slate-900">{selectedCourse.course_name}</h2>
               <p className="mt-2 text-sm text-slate-600">
-                Work on this course only. Add the next layer you need here, then manage teaching material from each batch workspace.
+                Work on this course only. Add the next layer you need here, manage module subcategories from the module table, then handle teaching material from each batch workspace.
               </p>
             </div>
             <div className="grid min-w-[220px] gap-3 sm:grid-cols-3">

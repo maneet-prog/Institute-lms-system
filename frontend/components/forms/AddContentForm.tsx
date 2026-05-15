@@ -54,6 +54,7 @@ export function AddContentForm({
     course_id: selectedCourseId ?? "",
     subcourse_id: selectedSubcourseId ?? "",
     module_id: selectedModuleId ?? "",
+    module_subcategory_id: "general",
     title: "",
     category: "reading",
     duration: 60,
@@ -73,7 +74,8 @@ export function AddContentForm({
       batch_id: batchId ?? "",
       course_id: selectedCourseId ?? "",
       subcourse_id: selectedSubcourseId ?? "",
-      module_id: selectedModuleId ?? ""
+      module_id: selectedModuleId ?? "",
+      module_subcategory_id: "general"
     }));
   }, [batchId, selectedCourseId, selectedSubcourseId, selectedModuleId]);
 
@@ -102,11 +104,32 @@ export function AddContentForm({
     [modules, content.module_id]
   );
   const moduleCategory = selectedModule?.exam_type ?? "general";
+  const moduleSubcategoryOptions = useMemo(
+    () => [
+      { label: "Select a subcategory", value: "" },
+      ...((selectedModule?.module_subcategories || []).map((item) => ({
+        label: item.name === "general" ? "General" : item.name,
+        value: item.subcategory_id
+      })) ?? [])
+    ],
+    [selectedModule]
+  );
 
   useEffect(() => {
     if (!content.module_id) return;
     setContent((prev) => ({ ...prev, category: moduleCategory }));
   }, [content.module_id, moduleCategory]);
+
+  useEffect(() => {
+    const availableIds = new Set((selectedModule?.module_subcategories || []).map((item) => item.subcategory_id));
+    setContent((prev) => ({
+      ...prev,
+      module_subcategory_id:
+        prev.module_subcategory_id && availableIds.has(prev.module_subcategory_id)
+          ? prev.module_subcategory_id
+          : "general"
+    }));
+  }, [selectedModule]);
 
   const supportsDocxGenerator = content.category === "reading" || content.category === "writing";
   const supportsListeningGenerator = content.category === "listening";
@@ -198,6 +221,7 @@ export function AddContentForm({
       duration: content.duration,
       attempt_limit: content.attempt_limit,
       exam_type_id: content.subcourse_id,
+      module_subcategory_id: content.module_subcategory_id || "general",
       renderer_kind:
         content.category === "writing"
           ? "tecai_writing"
@@ -268,7 +292,8 @@ export function AddContentForm({
                 ...prev,
                 course_id: e.target.value,
                 subcourse_id: "",
-                module_id: ""
+                module_id: "",
+                module_subcategory_id: "general"
               }))
             }
             required
@@ -282,7 +307,8 @@ export function AddContentForm({
               setContent((prev) => ({
                 ...prev,
                 subcourse_id: e.target.value,
-                module_id: ""
+                module_id: "",
+                module_subcategory_id: "general"
               }))
             }
             required
@@ -292,9 +318,22 @@ export function AddContentForm({
             label="Module"
             options={moduleOptions}
             value={content.module_id}
-            onChange={(e) => setContent((prev) => ({ ...prev, module_id: e.target.value }))}
+            onChange={(e) =>
+              setContent((prev) => ({
+                ...prev,
+                module_id: e.target.value,
+                module_subcategory_id: "general"
+              }))
+            }
             required
             disabled={!content.subcourse_id || addContent.isPending}
+          />
+          <Select
+            label="Module Subcategory"
+            options={moduleSubcategoryOptions}
+            value={content.module_subcategory_id}
+            onChange={(e) => setContent((prev) => ({ ...prev, module_subcategory_id: e.target.value || "general" }))}
+            disabled={!content.module_id || addContent.isPending}
           />
           <Input
             label="Exam Title"
@@ -363,6 +402,9 @@ export function AddContentForm({
                       <p className="mt-1 text-xs uppercase tracking-[0.2em] text-brand-600">
                         {item.type}
                       </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Subcategory: {item.module_subcategory_name || "general"}
+                      </p>
                       {item.description ? (
                         <p className="mt-2 text-sm text-slate-600">{item.description.replace(/<[^>]+>/g, "")}</p>
                       ) : null}
@@ -383,6 +425,7 @@ export function AddContentForm({
                             visibility_scope: content.visibility_scope,
                             assigned_student_ids:
                               content.visibility_scope === "selected_students" ? content.assigned_student_ids : [],
+                            module_subcategory_id: item.module_subcategory_id || "general",
                             institute_id: instituteId
                           }
                         })

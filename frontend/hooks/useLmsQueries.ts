@@ -22,11 +22,13 @@ import {
   assignReusableContentToBatch,
   createCourse,
   createModule,
+  createModuleSubcategory,
   createSubCourse,
   deleteContent,
   deleteReusableContent,
   deleteCourse,
   deleteModule,
+  deleteModuleSubcategory,
   deleteSubCourse,
   getCourseModuleExam,
   getCourses,
@@ -51,6 +53,7 @@ import {
   updateReusableContent,
   updateCourse,
   updateModule,
+  updateModuleSubcategory,
   updateSubCourse
 } from "@/services/courses";
 import {
@@ -455,6 +458,59 @@ export function useDeleteModuleMutation() {
       queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["student-modules"] });
       pushToast("Module deleted successfully.", "success");
+    }
+  });
+}
+
+export function useCreateModuleSubcategoryMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      moduleId,
+      payload
+    }: {
+      moduleId: string;
+      payload: Parameters<typeof createModuleSubcategory>[1];
+    }) => createModuleSubcategory(moduleId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["modules"] });
+      pushToast("Module subcategory created successfully.", "success");
+    }
+  });
+}
+
+export function useUpdateModuleSubcategoryMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      moduleId,
+      subcategoryId,
+      payload
+    }: {
+      moduleId: string;
+      subcategoryId: string;
+      payload: Parameters<typeof updateModuleSubcategory>[2];
+    }) => updateModuleSubcategory(moduleId, subcategoryId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["modules"] });
+      pushToast("Module subcategory updated successfully.", "success");
+    }
+  });
+}
+
+export function useDeleteModuleSubcategoryMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      moduleId,
+      subcategoryId
+    }: {
+      moduleId: string;
+      subcategoryId: string;
+    }) => deleteModuleSubcategory(moduleId, subcategoryId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["modules"] });
+      pushToast("Module subcategory deleted successfully.", "success");
     }
   });
 }

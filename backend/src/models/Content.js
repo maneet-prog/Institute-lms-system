@@ -177,6 +177,8 @@ const contentSchema = new mongoose.Schema(
     storageKey: { type: String },
     orderIndex: { type: Number, default: 0 },
     duration: { type: Number, default: 0 },
+    moduleSubcategoryId: { type: String, default: "general", index: true },
+    moduleSubcategoryName: { type: String, default: "general" },
     profile: { type: contentProfileSchema, default: () => ({}) },
     visibilityScope: {
       type: String,

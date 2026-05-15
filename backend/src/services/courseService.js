@@ -3,6 +3,7 @@ const Subcourse = require("../models/Subcourse");
 const Module = require("../models/Module");
 const Content = require("../models/Content");
 const SystemSetting = require("../models/SystemSetting");
+const mongoose = require("mongoose");
 const AppError = require("../utils/AppError");
 const { uploadFile, deleteFile } = require("./storageService");
 const {
@@ -23,6 +24,11 @@ const findSubcourse = (subcourseId, instituteId) => Subcourse.findOne({ _id: sub
 const findModule = (moduleId, instituteId) => Module.findOne({ _id: moduleId, instituteId });
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const GENERAL_MODULE_SUBCATEGORY = Object.freeze({
+  subcategoryId: "general",
+  name: "general",
+  active: true
+});
 
 const inferModuleExamType = (moduleName = "") => {
   const normalized = String(moduleName).trim().toLowerCase();
@@ -31,6 +37,46 @@ const inferModuleExamType = (moduleName = "") => {
   if (normalized.includes("listening") || normalized.includes("listing")) return "listening";
   if (normalized.includes("speaking") || normalized.includes("spoken")) return "speaking";
   return "general";
+};
+
+const normalizeModuleSubcategoryName = (value = "") => String(value).trim();
+
+const getModuleSubcategories = (moduleItem) => {
+  const rawItems = Array.isArray(moduleItem?.moduleSubcategories) ? moduleItem.moduleSubcategories : [];
+  const unique = new Map([[GENERAL_MODULE_SUBCATEGORY.subcategoryId, { ...GENERAL_MODULE_SUBCATEGORY }]]);
+
+  rawItems.forEach((item) => {
+    if (!item || item.active === false) return;
+    const subcategoryId = String(item.subcategoryId || "").trim();
+    const name = normalizeModuleSubcategoryName(item.name);
+    if (!subcategoryId || !name || subcategoryId === GENERAL_MODULE_SUBCATEGORY.subcategoryId) return;
+    unique.set(subcategoryId, {
+      subcategoryId,
+      name,
+      active: true
+    });
+  });
+
+  return [...unique.values()];
+};
+
+const assertModuleManagementAccess = async (moduleItem, instituteId, currentUser) => {
+  if (hasRole(currentUser, "teacher") && !hasRole(currentUser, "super_admin", "institute_admin")) {
+    const teacherScope = await getTeacherScope(currentUser._id, instituteId);
+    if (!teacherScope.coursePairs.has(`${String(moduleItem.courseId)}::${String(moduleItem.subcourseId)}`)) {
+      throw new AppError("Teachers can only manage modules in their assigned batch course paths.", 403);
+    }
+  }
+};
+
+const findModuleSubcategoryByName = (moduleItem, name, excludeId) => {
+  const normalizedName = normalizeModuleSubcategoryName(name).toLowerCase();
+  return getModuleSubcategories(moduleItem).find(
+    (item) =>
+      item.subcategoryId !== GENERAL_MODULE_SUBCATEGORY.subcategoryId &&
+      item.subcategoryId !== excludeId &&
+      item.name.toLowerCase() === normalizedName
+  );
 };
 
 const findDuplicateModuleByName = ({ instituteId, subcourseId, moduleName, excludeId }) =>
@@ -416,12 +462,7 @@ const deleteModule = async (id, tenant, currentUser) => {
   const moduleItem = await findModule(id, instituteId);
   if (!moduleItem) throw new AppError("Module not found.", 404);
 
-  if (hasRole(currentUser, "teacher") && !hasRole(currentUser, "super_admin", "institute_admin")) {
-    const teacherScope = await getTeacherScope(currentUser._id, instituteId);
-    if (!teacherScope.coursePairs.has(`${String(moduleItem.courseId)}::${String(moduleItem.subcourseId)}`)) {
-      throw new AppError("Teachers can only manage modules in their assigned batch course paths.", 403);
-    }
-  }
+  await assertModuleManagementAccess(moduleItem, instituteId, currentUser);
 
   moduleItem.active = false;
   await moduleItem.save();
@@ -463,6 +504,103 @@ const listModules = async ({ tenant, currentUser, instituteId, courseId, subcour
   return modules.map(serializeModule);
 };
 
+const createModuleSubcategory = async (moduleId, payload, tenant, currentUser) => {
+  const instituteId = await resolveInstituteScope({
+    requestedInstituteId: payload.institute_id,
+    tenant,
+    currentUser
+  });
+  const moduleItem = await findModule(moduleId, instituteId);
+  if (!moduleItem) throw new AppError("Module not found.", 404);
+
+  await assertModuleManagementAccess(moduleItem, instituteId, currentUser);
+
+  const name = normalizeModuleSubcategoryName(payload.name);
+  if (!name) {
+    throw new AppError("Module subcategory name is required.", 400);
+  }
+  if (name.toLowerCase() === GENERAL_MODULE_SUBCATEGORY.name) {
+    throw new AppError("The default general subcategory already exists.", 409);
+  }
+  if (findModuleSubcategoryByName(moduleItem, name)) {
+    throw new AppError("A module subcategory with this name already exists.", 409);
+  }
+
+  moduleItem.moduleSubcategories = [
+    ...(moduleItem.moduleSubcategories || []).filter((item) => item?.active !== false),
+    {
+      subcategoryId: new mongoose.Types.ObjectId().toString(),
+      name,
+      active: true
+    }
+  ];
+  await moduleItem.save();
+
+  return serializeModule(moduleItem);
+};
+
+const updateModuleSubcategory = async (moduleId, subcategoryId, payload, tenant, currentUser) => {
+  const instituteId = await resolveInstituteScope({
+    requestedInstituteId: payload.institute_id,
+    tenant,
+    currentUser
+  });
+  const moduleItem = await findModule(moduleId, instituteId);
+  if (!moduleItem) throw new AppError("Module not found.", 404);
+
+  await assertModuleManagementAccess(moduleItem, instituteId, currentUser);
+
+  if (subcategoryId === GENERAL_MODULE_SUBCATEGORY.subcategoryId) {
+    throw new AppError("The default general subcategory cannot be edited.", 400);
+  }
+
+  const target = (moduleItem.moduleSubcategories || []).find(
+    (item) => item?.subcategoryId === subcategoryId && item?.active !== false
+  );
+  if (!target) {
+    throw new AppError("Module subcategory not found.", 404);
+  }
+
+  const name = normalizeModuleSubcategoryName(payload.name);
+  if (!name) {
+    throw new AppError("Module subcategory name is required.", 400);
+  }
+  if (name.toLowerCase() === GENERAL_MODULE_SUBCATEGORY.name) {
+    throw new AppError("The default general subcategory already exists.", 409);
+  }
+  if (findModuleSubcategoryByName(moduleItem, name, subcategoryId)) {
+    throw new AppError("A module subcategory with this name already exists.", 409);
+  }
+
+  target.name = name;
+  target.active = true;
+  await moduleItem.save();
+
+  return serializeModule(moduleItem);
+};
+
+const deleteModuleSubcategory = async (moduleId, subcategoryId, tenant, currentUser) => {
+  const instituteId = await resolveInstituteScope({ tenant, currentUser });
+  const moduleItem = await findModule(moduleId, instituteId);
+  if (!moduleItem) throw new AppError("Module not found.", 404);
+
+  await assertModuleManagementAccess(moduleItem, instituteId, currentUser);
+
+  if (subcategoryId === GENERAL_MODULE_SUBCATEGORY.subcategoryId) {
+    throw new AppError("The default general subcategory cannot be deleted.", 400);
+  }
+
+  const nextSubcategories = (moduleItem.moduleSubcategories || []).filter(
+    (item) => item?.subcategoryId !== subcategoryId && item?.active !== false
+  );
+  if (nextSubcategories.length === (moduleItem.moduleSubcategories || []).filter((item) => item?.active !== false).length) {
+    throw new AppError("Module subcategory not found.", 404);
+  }
+
+  moduleItem.moduleSubcategories = nextSubcategories;
+  await moduleItem.save();
+};
+
 module.exports = {
   createCourse,
   listCourses,
@@ -477,5 +615,8 @@ module.exports = {
   createModule,
   updateModule,
   deleteModule,
-  listModules
+  listModules,
+  createModuleSubcategory,
+  updateModuleSubcategory,
+  deleteModuleSubcategory
 };
