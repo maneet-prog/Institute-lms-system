@@ -221,6 +221,19 @@
             transform: scale(1.2);
             /* Makes buttons easier to click */
         }
+
+        .type-10-dropdown {
+            padding: 2px 5px;
+            border: 1px solid #0b1f3a;
+            border-radius: 4px;
+            background-color: #fff;
+            font-family: inherit;
+            font-size: 13px;
+            margin: 0 4px;
+            color: #0b1f3a;
+            cursor: pointer;
+            vertical-align: middle;
+        }
     </style>
 </head>
 
@@ -281,7 +294,6 @@
             const audioFile = document.getElementById("audioInput").files[0];
             const ytLink = document.getElementById("ytLinkInput").value.trim();
 
-            // Require a DOCX, but allow either Local Audio OR YouTube Link
             if (!file) return alert("Please upload a DOCX file.");
             if (!audioFile && !ytLink) return alert("Please upload an Audio file or paste a YouTube link.");
 
@@ -347,7 +359,6 @@
             }
         }
 
-        // Update your existing parseTECAIInline or link detection logic:
         // When you find a link in your docx processing, use this:
         function handleMediaLink(url) {
             if (url.includes("youtube.com") || url.includes("youtu.be")) {
@@ -367,7 +378,6 @@
                 if (audio && audio.duration) {
                     remaining = Math.floor(audio.duration - audio.currentTime);
                 } else {
-                    // Default 60-minute countdown if no local audio duration exists
                     totalSeconds--;
                     remaining = totalSeconds;
                 }
@@ -488,10 +498,8 @@
 
                         fullText = fullText.replace(/\s+/g, " ").trim();
 
-                        // Inside renderTable function
                         if (fullText.match(/\[TECAI\s*TYPE\s*4\s*SET\s*(\d+)\]/i)) {
                             let mod = fullText.replace(/\[TECAI\s*TYPE\s*4\s*SET\s*(\d+)\]/gi, (m, id) => {
-                                // CRITICAL: You must add data-type="4" so the process loop can find it
                                 return `<div class="table-q-placeholder" data-type="4" data-set-id="${id}"></div>`;
                             });
                             html += `<div>${mod}</div>`;
@@ -627,7 +635,6 @@
                             let dataset = currentSection + "_" + id;
                             ph.outerHTML = `<div id="q${currentQ}"><b>${currentQ}.</b> <span class="dropzone" data-set="${dataset}"></span></div>`;
                         }
-                        // ADD THIS FOR TYPE 6 placeholder replacement
                         else if (type === "6") {
                             ph.outerHTML = `<b id="q${currentQ}">${currentQ}.</b> <input name="q${currentQ}" style="width:100px;margin:0 5px;">`;
                         }
@@ -813,7 +820,6 @@
 
                     // TYPE 8 (Multi-Select with Range Numbering)
                     if (txt.match(/\[TECAI\s*TYPE\s*8\]/i)) {
-                        // 1. Peek ahead to find the limit in the OPTIONS tag
                         let limit = 2; // Default
                         for (let i = content.indexOf(p); i < content.length; i++) {
                             if (content[i] && content[i].text) {
@@ -830,7 +836,6 @@
                         let qRange = (limit > 1) ? `${qNum}–${qNum + limit - 1}` : `${qNum}`;
                         let clean = txt.replace(/\[TECAI\s*TYPE\s*8\]/i, "");
 
-                        // 3. Add 'type-8-group' class and data-limit for the Navigation function to find
                         panelHTML += `<div id="q${qNum}" class="question-container type-8-group" data-limit="${limit}">
                     <b>${qRange}.</b> ${clean}<br>`;
                         return;
@@ -869,7 +874,7 @@
         </div>`;
 
                         panelHTML += headerHtml;
-                        return; // ❌ CRITICAL: Stops the loop so this line doesn't print again
+                        return;
                     }
 
                     // 2. Detect and render Type 9 Question Row
@@ -891,7 +896,30 @@
         </div>`;
 
                         panelHTML += rowHtml;
-                        return; // ❌ CRITICAL: Stops the loop so the "default" text doesn't print below the grid
+                        return;
+                    }
+
+                    //type 10 - Dropdown within a paragraph
+                    if (txt.includes("[TECAI Type 10:")) {
+                        let modHtml = txt.replace(/\[TECAI\s*Type\s*10:\s*([^\]]+)\]/gi, (match, optionsString) => {
+                            let currentQ = qNum++;
+                            // Split the A/B/C options by the forward slash
+                            let options = optionsString.split('/').map(opt => opt.trim());
+
+                            let selectHtml = `<select name="q${currentQ}" class="type-10-dropdown">`;
+                            selectHtml += `<option value="">Select...</option>`;
+
+                            options.forEach(opt => {
+                                selectHtml += `<option value="${opt}">${opt}</option>`;
+                            });
+                            selectHtml += `</select>`;
+
+                            // This replaces the tag with "Question Number. Dropdown"
+                            return `<b id="q${currentQ}">${currentQ}.</b> ${selectHtml}`;
+                        });
+
+                        panelHTML += `<p>${modHtml}</p>`;
+                        return;
                     }
 
                     panelHTML += `<p>${line}</p>`;
@@ -1036,20 +1064,21 @@ Self Assessment:
                     continue;
                 }
 
-                // 1. Check for Type 8 (Question Ranges/Groups) 
-                if (qDiv.classList.contains("type-8-group")) {
+                // 1. Handle Type 8 (Question Ranges/Groups) 
+                if (qDiv && qDiv.classList.contains("type-8-group")) {
                     let limit = parseInt(qDiv.getAttribute("data-limit"));
+                    // Only select :checked inputs
                     let checked = qDiv.querySelectorAll('input:checked');
                     let values = Array.from(checked).map(c => c.value);
                     let rangeLabel = (limit > 1) ? `${i}–${i + limit - 1}` : `${i}`;
                     data.push(`${rangeLabel}. ${values.join(" | ") || " "}`);
-                    i += (limit - 1); // Skip indices covered by the range 
+                    i += (limit - 1);
                     continue;
                 }
 
-                // 2. Check for TYPE 4 (Drag and Drop)
-                let drops = qDiv.querySelectorAll(".dropzone");
-                if (drops.length > 0) {
+                // 2. Handle TYPE 4 (Drag and Drop)
+                if (qDiv && qDiv.querySelectorAll(".dropzone").length > 0) {
+                    let drops = qDiv.querySelectorAll(".dropzone");
                     let values = [];
                     drops.forEach(d => {
                         let dragged = d.querySelector(".draggable");
@@ -1059,13 +1088,28 @@ Self Assessment:
                     continue;
                 }
 
-                // 3. Check for Radio Buttons or Checkboxes (Type 1, 2, 5) 
-                let checkedInputs = qDiv.querySelectorAll('input[type="radio"]:checked, input[type="checkbox"]:checked');
-                if (checkedInputs.length > 0) {
-                    let values = Array.from(checkedInputs).map(input => input.value);
-                    data.push(`${i}. ${values.join(" | ")}`);
+                let inputs = document.querySelectorAll(`[name="q${i}"], [name^="q${i}_"]`);
+
+                if (inputs.length > 0) {
+                    let values = [];
+
+                    inputs.forEach(inp => {
+                        if (inp.tagName === "SELECT") {
+                            // Only add if a selection was actually made
+                            if (inp.value) values.push(inp.value);
+                        } else if (inp.type === "radio" || inp.type === "checkbox") {
+                            if (inp.checked) values.push(inp.value);
+                        } else {
+                            // Text inputs
+                            if (inp.value.trim()) values.push(inp.value.trim());
+                        }
+                    });
+
+                    // Only push to data if we found a value, otherwise push empty
+                    data.push(`${i}. ${values.join(" | ") || " "}`);
                     continue;
                 }
+
 
                 // 4. Check for Dropdowns (Type 7) 
                 let dropdown = qDiv.querySelector("select");
@@ -1086,8 +1130,6 @@ Self Assessment:
                 let textInputs = [];
 
                 if (qDiv) {
-                    // 🔍 SEARCH WITHIN qDiv
-                    // We only want inputs that are NOT radio/checkbox, OR are radio/checkbox AND are checked
                     textInputs = Array.from(qDiv.querySelectorAll('input')).filter(inp => {
                         if (inp.type === 'radio' || inp.type === 'checkbox') {
                             return inp.checked; // Only include if selected
@@ -1096,7 +1138,6 @@ Self Assessment:
                     });
                 }
 
-                // FALLBACK: Search globally if qDiv is missing or yielded no results (e.g. inside tables)
                 if (textInputs.length === 0) {
                     let namedInputs = Array.from(document.querySelectorAll(`input[name="q${i}"], input[name^="q${i}_"]`));
                     textInputs = namedInputs.filter(inp => {

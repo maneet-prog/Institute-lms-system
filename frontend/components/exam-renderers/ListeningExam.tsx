@@ -91,6 +91,7 @@ export function ListeningExam({
         .type-9-options-head, .type-9-options { flex: 3; display: flex; justify-content: space-around; align-items: center; }
         .type-9-option-label { width: 20px; text-align: center; }
         .type-9-options input[type="radio"] { cursor: pointer; transform: scale(1.2); }
+        .type-10-dropdown { padding: 2px 5px; border: 1px solid #0b1f3a; border-radius: 4px; background-color: #fff; font-family: inherit; font-size: 13px; margin: 0 4px; color: #0b1f3a; cursor: pointer; vertical-align: middle; }
     </style>
 </head>
 <body class="${escapeHtml(presentationVariant)}">
@@ -582,7 +583,7 @@ export function ListeningExam({
         </div>\`;
 
                         panelHTML += headerHtml;
-                        return; // ❌ CRITICAL: Stops the loop so this line doesn't print again
+                        return;
                     }
 
                     // 2. Detect and render Type 9 Question Row
@@ -604,6 +605,27 @@ export function ListeningExam({
         </div>\`;
 
                         panelHTML += rowHtml;
+                        return;
+                    }
+
+                    //type 10 - Dropdown within a paragraph
+                    if (txt.includes("[TECAI Type 10:")) {
+                        let modHtml = txt.replace(/\\[TECAI\\s*Type\\s*10:\\s*([^\\]]+)\\]/gi, (match, optionsString) => {
+                            let currentQ = qNum++;
+                            let options = optionsString.split('/').map(opt => opt.trim());
+
+                            let selectHtml = \`<select name="q\${currentQ}" class="type-10-dropdown">\`;
+                            selectHtml += \`<option value="">Select...</option>\`;
+
+                            options.forEach(opt => {
+                                selectHtml += \`<option value="\${opt}">\${opt}</option>\`;
+                            });
+                            selectHtml += \`</select>\`;
+
+                            return \`<b id="q\${currentQ}">\${currentQ}.</b> \${selectHtml}\`;
+                        });
+
+                        rightHTML += \`<p>\${modHtml}</p>\`;
                         return;
                     }
 
@@ -705,34 +727,57 @@ export function ListeningExam({
             for (let i = 1; i < qNum; i++) {
                 let qDiv = document.getElementById(\`q\${i}\`);
                 if (!qDiv) {
+                    let directInput = document.querySelector(\`input[name="q\${i}"]\`);
+                    if (directInput) {
+                        data.push(\`\${i}.\${directInput.value.trim() || " "}\`);
+                        continue;
+                    }
                     data.push(\`\${i}. \`);
                     continue;
                 }
-                if (qDiv.classList.contains("type-8-group")) {
-                    let limit = parseInt(qDiv.getAttribute("data-limit"), 10);
-                    let checked = qDiv.querySelectorAll("input:checked");
-                    let values = Array.from(checked).map(function (c) { return c.value; });
-                    let rangeLabel = limit > 1 ? \`\${i}–\${i + limit - 1}\` : \`\${i}\`;
-                    data.push(\`\${rangeLabel}. \${values.join(" | ") || " "}\`);
-                    i += limit - 1;
+
+                // 1. Handle Type 8 (Question Ranges/Groups) 
+                if (qDiv && qDiv.classList.contains("type-8-group")) {
+                    let limit = parseInt(qDiv.getAttribute("data-limit"));
+                    let checked = qDiv.querySelectorAll('input:checked');
+                    let values = Array.from(checked).map(c => c.value);
+                    let rangeLabel = (limit > 1) ? \`\${i}–\${i + limit - 1}\` : \`\${i}\`;
+                    data.push(\`\${rangeLabel}.\${values.join(" | ") || " "}\`);
+                    i += (limit - 1);
                     continue;
                 }
-                let drops = qDiv.querySelectorAll(".dropzone");
-                if (drops.length > 0) {
+
+                // 2. Handle TYPE 4 (Drag and Drop)
+                if (qDiv && qDiv.querySelectorAll(".dropzone").length > 0) {
+                    let drops = qDiv.querySelectorAll(".dropzone");
                     let values = [];
-                    drops.forEach(function (d) {
+                    drops.forEach(d => {
                         let dragged = d.querySelector(".draggable");
                         values.push(dragged ? dragged.innerText.trim() : " ");
                     });
-                    data.push(\`\${i}. \${values.join(" | ")}\`);
+                    data.push(\`\${i}.\${values.join(" | ")}\`);
                     continue;
                 }
-                let checkedInputs = qDiv.querySelectorAll('input[type="radio"]:checked, input[type="checkbox"]:checked');
-                if (checkedInputs.length > 0) {
-                    let values = Array.from(checkedInputs).map(function (input) { return input.value; });
-                    data.push(\`\${i}. \${values.join(" | ")}\`);
+
+                let inputs = document.querySelectorAll(\`[name="q\${i}"], [name^="q\${i}_"]\`);
+
+                if (inputs.length > 0) {
+                    let values = [];
+
+                    inputs.forEach(inp => {
+                        if (inp.tagName === "SELECT") {
+                            if (inp.value) values.push(inp.value);
+                        } else if (inp.type === "radio" || inp.type === "checkbox") {
+                            if (inp.checked) values.push(inp.value);
+                        } else {
+                            if (inp.value.trim()) values.push(inp.value.trim());
+                        }
+                    });
+
+                    data.push(\`\${i}. \${values.join(" | ") || " "}\`);
                     continue;
                 }
+
                 let dropdown = qDiv.querySelector("select");
                 if (dropdown) {
                     data.push(\`\${i}. \${dropdown.value.trim() || " "}\`);
