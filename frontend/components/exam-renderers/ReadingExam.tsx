@@ -216,7 +216,7 @@ export function ReadingExam({
         }
 
         async function renderTable(tblNode, zip, relationships) {
-            let html = "<table style='border:none;border-collapse:collapse;width:100%'>";
+            let html = "<table border='1' style='border-collapse:collapse;width:100%'>";
             const rows = tblNode.getElementsByTagName("w:tr");
             for (let row of rows) {
                 html += "<tr>";
