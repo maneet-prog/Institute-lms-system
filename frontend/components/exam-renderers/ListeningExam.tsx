@@ -29,8 +29,13 @@ export function ListeningExam({
 }: ListeningExamProps) {
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const [htmlContent, setHtmlContent] = useState<string>("");
+    // Track if the student has explicitly started the exam
+    const [hasStarted, setHasStarted] = useState<boolean>(false);
 
     useEffect(() => {
+        // Prevent generating the HTML content if the user hasn't clicked start
+        if (!hasStarted) return;
+
         const renderer = content.quiz?.renderer;
         const fileUrl = content.file_url || "";
         const extUrl = content.external_url || "";
@@ -815,15 +820,80 @@ export function ListeningExam({
 </html>`;
 
         setHtmlContent(html);
-    }, [content, studentName, autoStart, allowSave, presentationVariant]);
+    }, [content, studentName, autoStart, allowSave, presentationVariant, hasStarted]);
 
     return (
-        <iframe
-            ref={iframeRef}
-            srcDoc={htmlContent}
-            style={{ width: "100vw", height: "100vh", border: "none" }}
-            title="TECAI Listening Exam"
-            allow="autoplay; encrypted-media"
-        />
+        <div style={{ width: "100vw", height: "100vh", position: "relative", overflow: "hidden" }}>
+            {/* Permission Prompt Modal */}
+            {!hasStarted && (
+                <div
+                    style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        height: "100%",
+                        backgroundColor: "#0b1f3a",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        zIndex: 9999,
+                        color: "white",
+                        fontFamily: '"Segoe UI", Arial, sans-serif',
+                        padding: "20px",
+                        textAlign: "center",
+                    }}
+                >
+                    <div
+                        style={{
+                            background: "white",
+                            color: "#333",
+                            padding: "40px",
+                            borderRadius: "12px",
+                            boxShadow: "0 10px 25px rgba(0,0,0,0.3)",
+                            maxWidth: "450px",
+                            width: "100%",
+                        }}
+                    >
+                        <h2 style={{ margin: "0 0 10px 0", color: "#0b1f3a" }}>Listening Examination</h2>
+                        <p style={{ color: "#555", fontSize: "15px", marginBottom: "30px", lineHeight: "1.5" }}>
+                            Hello, <strong>{studentName || "Student"}</strong>.<br />
+                            This module contains embedded audio files. Please ensure your volume is turned up before starting.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setHasStarted(true)}
+                            style={{
+                                background: "#0b1f3a",
+                                color: "white",
+                                border: "none",
+                                padding: "12px 30px",
+                                borderRadius: "6px",
+                                cursor: "pointer",
+                                fontWeight: 600,
+                                fontSize: "16px",
+                                transition: "background 0.2s",
+                            }}
+                            onMouseOver={(e) => (e.currentTarget.style.background = "#163d6b")}
+                            onMouseOut={(e) => (e.currentTarget.style.background = "#0b1f3a")}
+                        >
+                            Start Exam & Play Audio
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Exam Frame */}
+            {hasStarted && (
+                <iframe
+                    ref={iframeRef}
+                    srcDoc={htmlContent}
+                    style={{ width: "100vw", height: "100vh", border: "none" }}
+                    title="TECAI Listening Exam"
+                    allow="autoplay; encrypted-media"
+                />
+            )}
+        </div>
     );
 }
