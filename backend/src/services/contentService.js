@@ -17,11 +17,12 @@ const {
 const { uploadFile, deleteFile } = require("./storageService");
 const { validateQuizDefinition } = require("../utils/quiz");
 const {
-  buildTecaiWritingRenderer,
+  buildTecaiSpeakingQuizFromDocx,
   sanitizeRenderer,
   TECAI_READING_KIND,
   TECAI_WRITING_KIND,
   TECAI_LISTENING_KIND,
+  TECAI_SPEAKING_KIND,
   DEFAULT_TIMER_SECONDS
 } = require("../utils/tecaiReading");
 const { serializeContent, serializeStudentSubmission } = require("../utils/serializers");
@@ -389,12 +390,51 @@ const buildListeningRenderer = ({ timerSeconds, audioUrl, promptFileUrl, instruc
   instructions: instructions || ""
 });
 
+const buildSpeakingRenderer = ({ timerSeconds, instructions, parts, metadata = {} }) => ({
+  kind: TECAI_SPEAKING_KIND,
+  timer_seconds: Math.max(0, Number(timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS),
+  exam_type:
+    metadata.exam_type ||
+    metadata.examType ||
+    metadata.exam_family ||
+    metadata.examFamily ||
+    "general",
+  instructions: instructions || "",
+  allow_rerecord: metadata.allow_rerecord !== false,
+  voice: metadata.voice || null,
+  instruction_audio_asset: metadata.instruction_audio_asset || metadata.instructionAudioAsset || null,
+  parts: parts.map((part, index) => ({
+    part_id: part.partId,
+    title: part.title,
+    kind: part.kind || "section",
+    instructions: part.instructions || "",
+    instruction_audio_asset: part.audio.find((asset) => asset.type === "audio") || null,
+    questions: part.questions.map((question, questionIndex) => ({
+      question_id: question.questionId,
+      prompt: question.prompt,
+      instructions: question.instructions || "",
+      prep_seconds: Math.max(
+        0,
+        Number(question.answerData?.prep_seconds || question.answerData?.prepSeconds || 0) || 0
+      ),
+      record_seconds: Math.max(
+        0,
+        Number(question.answerData?.record_seconds || question.answerData?.recordSeconds || 0) || 0
+      ),
+      audio_asset: question.answerData?.audio_asset || question.answerData?.audioAsset || null,
+      order_index: Number(question.orderIndex || question.order_index || questionIndex) || questionIndex
+    })),
+    order_index: Number(part.orderIndex || part.order_index || index) || index
+  }))
+});
+
 const buildExamProfile = ({
   payload,
   moduleItem,
   rendererKind,
   timerSeconds,
-  parts
+  parts,
+  metadata
 }) => ({
   examTypeId: payload.exam_type_id || moduleItem.subcourseId,
   moduleId: moduleItem._id,
@@ -403,7 +443,7 @@ const buildExamProfile = ({
   rendererKind,
   timerSeconds,
   parts,
-  metadata: parseOptionalJson(payload.exam_metadata, "exam_metadata")
+  metadata: metadata ?? parseOptionalJson(payload.exam_metadata, "exam_metadata")
 });
 
 const resolveExamRenderer = (content) => {
@@ -435,10 +475,42 @@ const resolveExamRenderer = (content) => {
     });
   }
 
+  if (content.profile?.exam?.rendererKind === TECAI_SPEAKING_KIND && content.profile?.exam?.parts?.length) {
+    return buildSpeakingRenderer({
+      instructions: content.profile?.instructions || "",
+      timerSeconds: content.profile?.exam?.timerSeconds || DEFAULT_TIMER_SECONDS,
+      parts: normalizeExamParts(content.profile.exam.parts),
+      metadata: content.profile?.exam?.metadata || {}
+    });
+  }
+
   return null;
 };
 
 const previewQuiz = async (file, options = {}) => {
+  const category = String(options?.category || "").trim().toLowerCase();
+  if (category === "speaking" && file) {
+    const examMetadata = parseOptionalJson(options?.exam_metadata, "exam_metadata") || {};
+    const speakingQuiz = await buildTecaiSpeakingQuizFromDocx(file, {
+      attemptLimit: Math.max(1, Number(options?.attempt_limit || 1) || 1),
+      examType:
+        examMetadata.exam_type ||
+        examMetadata.examType ||
+        examMetadata.exam_family ||
+        examMetadata.examFamily ||
+        "general",
+      allowRerecord: examMetadata.allow_rerecord !== false,
+      voiceId: examMetadata.voice?.voice_id || examMetadata.voice_id || null
+    });
+
+    return {
+      mode: speakingQuiz.mode,
+      attempt_limit: speakingQuiz.attemptLimit,
+      questions: [],
+      renderer: speakingQuiz.renderer
+    };
+  }
+
   return {
     mode: "written",
     attempt_limit: 999,
@@ -514,6 +586,8 @@ const createContent = async (payload, file, tenant, user) => {
     let examProfile = null;
     const category = inferModuleCategory(moduleItem);
     const selectedSubcategory = resolveModuleSubcategorySelection(moduleItem, payload);
+    const examMetadata = parseOptionalJson(payload.exam_metadata, "exam_metadata") || {};
+    const resolvedResponseType = category === "speaking" ? "audio" : payload.response_type;
     const rendererKind =
       payload.renderer_kind ||
       (category === "writing"
@@ -522,12 +596,14 @@ const createContent = async (payload, file, tenant, user) => {
           ? TECAI_READING_KIND
           : category === "listening"
             ? TECAI_LISTENING_KIND
-            : "custom");
+            : category === "speaking"
+              ? TECAI_SPEAKING_KIND
+              : "custom");
     const timerSeconds =
       Math.max(0, Number(payload.timer_seconds || 0) || 0) ||
       Math.max(0, Number(payload.duration || 0) * 60 || 0) ||
       DEFAULT_TIMER_SECONDS;
-    const parsedExamParts = normalizeExamParts(parseOptionalJson(payload.exam_parts, "exam_parts"));
+    let parsedExamParts = normalizeExamParts(parseOptionalJson(payload.exam_parts, "exam_parts"));
 
     if (payload.type === "quiz") {
       if (!file) {
@@ -545,34 +621,72 @@ const createContent = async (payload, file, tenant, user) => {
               parts: parsedExamParts
             })
           };
+        } else if (rendererKind === TECAI_SPEAKING_KIND || category === "speaking") {
+          if (!parsedExamParts.length) {
+            throw new AppError("Speaking exams require a DOCX file or at least one part in exam_parts.", 400);
+          }
+          quiz = {
+            mode: "written",
+            attemptLimit: Math.max(1, Number(payload.attempt_limit || 1) || 1),
+            questions: [],
+            renderer: buildSpeakingRenderer({
+              instructions: payload.instructions || "",
+              timerSeconds,
+              parts: parsedExamParts,
+              metadata: examMetadata
+            })
+          };
         }
       } else if (
         !quiz &&
         (rendererKind === TECAI_READING_KIND ||
           rendererKind === TECAI_WRITING_KIND ||
-          rendererKind === TECAI_LISTENING_KIND)
+          rendererKind === TECAI_LISTENING_KIND ||
+          rendererKind === TECAI_SPEAKING_KIND)
       ) {
-        quiz = {
-          mode: "written",
-          attemptLimit: Math.max(1, Number(payload.attempt_limit || 999) || 999),
-          questions: [],
-          renderer:
-            rendererKind === TECAI_READING_KIND
-              ? buildReadingRenderer({ timerSeconds })
-              : rendererKind === TECAI_LISTENING_KIND
-                ? buildListeningRenderer({
+        if (rendererKind === TECAI_SPEAKING_KIND) {
+          const generatedSpeakingQuiz = await buildTecaiSpeakingQuizFromDocx(file, {
+            attemptLimit: Math.max(1, Number(payload.attempt_limit || 1) || 1),
+            examType:
+              examMetadata.exam_type ||
+              examMetadata.examType ||
+              examMetadata.exam_family ||
+              examMetadata.examFamily ||
+              selectedSubcategory.name ||
+              moduleItem.moduleName,
+            allowRerecord: examMetadata.allow_rerecord !== false,
+            voiceId: examMetadata.voice?.voice_id || examMetadata.voice_id || null
+          });
+          quiz = {
+            mode: generatedSpeakingQuiz.mode,
+            attemptLimit: generatedSpeakingQuiz.attemptLimit,
+            questions: [],
+            renderer: generatedSpeakingQuiz.renderer
+          };
+          parsedExamParts = normalizeExamParts(generatedSpeakingQuiz.examParts);
+        } else {
+          quiz = {
+            mode: "written",
+            attemptLimit: Math.max(1, Number(payload.attempt_limit || 999) || 999),
+            questions: [],
+            renderer:
+              rendererKind === TECAI_READING_KIND
+                ? buildReadingRenderer({ timerSeconds })
+                : rendererKind === TECAI_LISTENING_KIND
+                  ? buildListeningRenderer({
                     timerSeconds,
                     audioUrl: payload.external_url || "",
                     promptFileUrl: upload?.fileUrl || "",
                     instructions: payload.instructions || ""
                   })
-                : {
+                  : {
                     kind: TECAI_WRITING_KIND,
                     timer_seconds:
                       Math.max(0, Number(timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS),
                     blocks: []
                   }
-        };
+          };
+        }
       }
       if (quiz && payload.attempt_limit !== undefined) {
         quiz.attemptLimit = Math.max(0, Number(payload.attempt_limit) || 0);
@@ -582,7 +696,17 @@ const createContent = async (payload, file, tenant, user) => {
         moduleItem,
         rendererKind: quiz?.renderer?.kind || rendererKind,
         timerSeconds: quiz?.renderer?.timer_seconds || timerSeconds,
-        parts: parsedExamParts
+        parts: parsedExamParts,
+        metadata: {
+          ...examMetadata,
+          ...(quiz?.renderer?.kind === TECAI_SPEAKING_KIND
+            ? {
+              voice: quiz.renderer.voice || null,
+              allow_rerecord: quiz.renderer.allow_rerecord !== false,
+              instruction_audio_asset: quiz.renderer.instruction_audio_asset || null
+            }
+            : {})
+        }
       });
     }
     const visibility = await resolveAssignedStudents({ payload, batch, instituteId });
@@ -616,7 +740,7 @@ const createContent = async (payload, file, tenant, user) => {
       profile: {
         category,
         instructions: payload.instructions,
-        responseType: payload.response_type,
+        responseType: resolvedResponseType,
         quiz,
         exam: examProfile
       }
@@ -695,6 +819,9 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
   const nextType = payload.type ?? content.type;
   const nextDescription = payload.description ?? content.description;
   const nextCategory = inferModuleCategory(moduleItem);
+  const nextExamMetadata =
+    parseOptionalJson(payload.exam_metadata, "exam_metadata") ?? content.profile?.exam?.metadata ?? {};
+  const nextResponseType = nextCategory === "speaking" ? "audio" : payload.response_type ?? content.profile?.responseType;
   const nextSubcategory = resolveModuleSubcategorySelection(moduleItem, payload, {
     id: content.moduleSubcategoryId,
     name: content.moduleSubcategoryName
@@ -703,9 +830,9 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
     payload.visibility_scope !== undefined || payload.assigned_student_ids !== undefined
       ? await resolveAssignedStudents({ payload, batch, instituteId })
       : {
-          visibilityScope: content.visibilityScope || "batch",
-          assignedStudentIds: (content.assignedStudentIds || []).map(asId).filter(Boolean)
-        };
+        visibilityScope: content.visibilityScope || "batch",
+        assignedStudentIds: (content.assignedStudentIds || []).map(asId).filter(Boolean)
+      };
   const nextRendererKind =
     payload.renderer_kind ||
     content.profile?.exam?.rendererKind ||
@@ -715,14 +842,16 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
         ? TECAI_READING_KIND
         : nextCategory === "listening"
           ? TECAI_LISTENING_KIND
-          : "custom");
+          : nextCategory === "speaking"
+            ? TECAI_SPEAKING_KIND
+            : "custom");
   const nextTimerSeconds =
     Math.max(0, Number(payload.timer_seconds || 0) || 0) ||
     Math.max(0, Number(payload.duration ?? content.duration ?? 0) * 60 || 0) ||
     content.profile?.exam?.timerSeconds ||
     content.profile?.quiz?.renderer?.timer_seconds ||
     DEFAULT_TIMER_SECONDS;
-  const parsedExamParts = normalizeExamParts(
+  let parsedExamParts = normalizeExamParts(
     parseOptionalJson(payload.exam_parts, "exam_parts") ?? content.profile?.exam?.parts ?? []
   );
   let nextQuiz =
@@ -730,18 +859,36 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
       ? (nextRendererKind === TECAI_WRITING_KIND || nextCategory === "writing")
         ? parsedExamParts.length
           ? {
+            mode: "written",
+            attemptLimit: Math.max(0, Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 0) || 0),
+            questions: [],
+            renderer: buildWritingRenderer({
+              instructions:
+                payload.instructions !== undefined ? payload.instructions || "" : content.profile?.instructions || "",
+              timerSeconds: nextTimerSeconds,
+              parts: parsedExamParts
+            })
+          }
+          : content.profile?.quiz || null
+        : (nextRendererKind === TECAI_SPEAKING_KIND || nextCategory === "speaking")
+          ? parsedExamParts.length
+            ? {
               mode: "written",
-              attemptLimit: Math.max(0, Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 0) || 0),
+              attemptLimit: Math.max(
+                1,
+                Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 1) || 1
+              ),
               questions: [],
-              renderer: buildWritingRenderer({
+              renderer: buildSpeakingRenderer({
                 instructions:
                   payload.instructions !== undefined ? payload.instructions || "" : content.profile?.instructions || "",
                 timerSeconds: nextTimerSeconds,
-                parts: parsedExamParts
+                parts: parsedExamParts,
+                metadata: nextExamMetadata
               })
             }
+            : content.profile?.quiz || null
           : content.profile?.quiz || null
-        : content.profile?.quiz || null
       : content.profile?.quiz || null;
 
   if (
@@ -749,31 +896,54 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
     nextType === "quiz" &&
     (nextRendererKind === TECAI_READING_KIND ||
       nextRendererKind === TECAI_WRITING_KIND ||
-      nextRendererKind === TECAI_LISTENING_KIND) &&
+      nextRendererKind === TECAI_LISTENING_KIND ||
+      nextRendererKind === TECAI_SPEAKING_KIND) &&
     (file || content.fileUrl || (nextRendererKind === TECAI_LISTENING_KIND && nextExternalUrl))
   ) {
-    nextQuiz = {
-      mode: "written",
-      attemptLimit: Math.max(1, Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 999) || 999),
-      questions: [],
-      renderer:
-        nextRendererKind === TECAI_READING_KIND
-          ? buildReadingRenderer({ timerSeconds: nextTimerSeconds })
-          : nextRendererKind === TECAI_LISTENING_KIND
-            ? buildListeningRenderer({
+    if (nextRendererKind === TECAI_SPEAKING_KIND && file) {
+      const generatedSpeakingQuiz = await buildTecaiSpeakingQuizFromDocx(file, {
+        attemptLimit: Math.max(1, Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 1) || 1),
+        examType:
+          nextExamMetadata.exam_type ||
+          nextExamMetadata.examType ||
+          nextExamMetadata.exam_family ||
+          nextExamMetadata.examFamily ||
+          nextSubcategory.name ||
+          moduleItem.moduleName,
+        allowRerecord: nextExamMetadata.allow_rerecord !== false,
+        voiceId: nextExamMetadata.voice?.voice_id || nextExamMetadata.voice_id || null
+      });
+      nextQuiz = {
+        mode: generatedSpeakingQuiz.mode,
+        attemptLimit: generatedSpeakingQuiz.attemptLimit,
+        questions: [],
+        renderer: generatedSpeakingQuiz.renderer
+      };
+      parsedExamParts = normalizeExamParts(generatedSpeakingQuiz.examParts);
+    } else {
+      nextQuiz = {
+        mode: "written",
+        attemptLimit: Math.max(1, Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 999) || 999),
+        questions: [],
+        renderer:
+          nextRendererKind === TECAI_READING_KIND
+            ? buildReadingRenderer({ timerSeconds: nextTimerSeconds })
+            : nextRendererKind === TECAI_LISTENING_KIND
+              ? buildListeningRenderer({
                 timerSeconds: nextTimerSeconds,
                 audioUrl: nextExternalUrl || "",
                 promptFileUrl: nextFileUrl || "",
                 instructions:
                   payload.instructions !== undefined ? payload.instructions || "" : content.profile?.instructions || ""
               })
-            : {
+              : {
                 kind: TECAI_WRITING_KIND,
                 timer_seconds:
                   Math.max(0, Number(nextTimerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS),
                 blocks: []
               }
-    };
+      };
+    }
   }
 
   if (
@@ -789,6 +959,19 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
     throw new AppError("Writing exams require a DOCX file or at least one task in exam_parts.", 400);
   }
 
+  if (
+    nextType === "quiz" &&
+    (nextRendererKind === TECAI_SPEAKING_KIND || nextCategory === "speaking") &&
+    !file &&
+    !parsedExamParts.length &&
+    !content.profile?.quiz
+  ) {
+    if (uploaded?.storageKey) {
+      await deleteFile(uploaded.storageKey);
+    }
+    throw new AppError("Speaking exams require a DOCX file or at least one part in exam_parts.", 400);
+  }
+
   if (nextQuiz && payload.attempt_limit !== undefined) {
     nextQuiz.attemptLimit = Math.max(0, Number(payload.attempt_limit) || 0);
   }
@@ -796,20 +979,30 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
   const nextExamProfile =
     nextType === "quiz"
       ? buildExamProfile({
-          payload: {
-            ...payload,
-            exam_type_id: payload.exam_type_id || content.profile?.exam?.examTypeId || moduleItem.subcourseId,
-            category: nextCategory,
-            exam_metadata:
-              payload.exam_metadata !== undefined
-                ? payload.exam_metadata
-                : JSON.stringify(content.profile?.exam?.metadata || null)
-          },
-          moduleItem,
-          rendererKind: nextQuiz?.renderer?.kind || nextRendererKind,
-          timerSeconds: nextQuiz?.renderer?.timer_seconds || nextTimerSeconds,
-          parts: parsedExamParts
-        })
+        payload: {
+          ...payload,
+          exam_type_id: payload.exam_type_id || content.profile?.exam?.examTypeId || moduleItem.subcourseId,
+          category: nextCategory,
+          exam_metadata:
+            payload.exam_metadata !== undefined
+              ? payload.exam_metadata
+              : JSON.stringify(content.profile?.exam?.metadata || null)
+        },
+        moduleItem,
+        rendererKind: nextQuiz?.renderer?.kind || nextRendererKind,
+        timerSeconds: nextQuiz?.renderer?.timer_seconds || nextTimerSeconds,
+        parts: parsedExamParts,
+        metadata: {
+          ...nextExamMetadata,
+          ...(nextQuiz?.renderer?.kind === TECAI_SPEAKING_KIND
+            ? {
+              voice: nextQuiz.renderer.voice || null,
+              allow_rerecord: nextQuiz.renderer.allow_rerecord !== false,
+              instruction_audio_asset: nextQuiz.renderer.instruction_audio_asset || null
+            }
+            : {})
+        }
+      })
       : null;
 
   try {
@@ -845,7 +1038,7 @@ const updateContent = async (id, payload, file, tenant, currentUser) => {
   content.assignedStudentIds = visibility.assignedStudentIds;
   content.profile.category = nextCategory;
   if (payload.instructions !== undefined) content.profile.instructions = payload.instructions;
-  if (payload.response_type !== undefined) content.profile.responseType = payload.response_type;
+  content.profile.responseType = nextResponseType;
   content.profile.quiz = nextQuiz;
   content.profile.exam = nextExamProfile;
 
@@ -972,6 +1165,8 @@ const createReusableContent = async (payload, file, tenant, user) => {
     let examProfile = null;
     const category = inferModuleCategory(moduleItem);
     const selectedSubcategory = resolveModuleSubcategorySelection(moduleItem, payload);
+    const examMetadata = parseOptionalJson(payload.exam_metadata, "exam_metadata") || {};
+    const resolvedResponseType = category === "speaking" ? "audio" : payload.response_type;
     const rendererKind =
       payload.renderer_kind ||
       (category === "writing"
@@ -980,12 +1175,14 @@ const createReusableContent = async (payload, file, tenant, user) => {
           ? TECAI_READING_KIND
           : category === "listening"
             ? TECAI_LISTENING_KIND
-            : "custom");
+            : category === "speaking"
+              ? TECAI_SPEAKING_KIND
+              : "custom");
     const timerSeconds =
       Math.max(0, Number(payload.timer_seconds || 0) || 0) ||
       Math.max(0, Number(payload.duration || 0) * 60 || 0) ||
       DEFAULT_TIMER_SECONDS;
-    const parsedExamParts = normalizeExamParts(parseOptionalJson(payload.exam_parts, "exam_parts"));
+    let parsedExamParts = normalizeExamParts(parseOptionalJson(payload.exam_parts, "exam_parts"));
 
     if (payload.type === "quiz") {
       if (!file) {
@@ -1003,34 +1200,72 @@ const createReusableContent = async (payload, file, tenant, user) => {
               parts: parsedExamParts
             })
           };
+        } else if (rendererKind === TECAI_SPEAKING_KIND || category === "speaking") {
+          if (!parsedExamParts.length) {
+            throw new AppError("Speaking exams require a DOCX file or at least one part in exam_parts.", 400);
+          }
+          quiz = {
+            mode: "written",
+            attemptLimit: Math.max(1, Number(payload.attempt_limit || 1) || 1),
+            questions: [],
+            renderer: buildSpeakingRenderer({
+              instructions: payload.instructions || "",
+              timerSeconds,
+              parts: parsedExamParts,
+              metadata: examMetadata
+            })
+          };
         }
       } else if (
         !quiz &&
         (rendererKind === TECAI_READING_KIND ||
           rendererKind === TECAI_WRITING_KIND ||
-          rendererKind === TECAI_LISTENING_KIND)
+          rendererKind === TECAI_LISTENING_KIND ||
+          rendererKind === TECAI_SPEAKING_KIND)
       ) {
-        quiz = {
-          mode: "written",
-          attemptLimit: Math.max(1, Number(payload.attempt_limit || 999) || 999),
-          questions: [],
-          renderer:
-            rendererKind === TECAI_READING_KIND
-              ? buildReadingRenderer({ timerSeconds })
-              : rendererKind === TECAI_LISTENING_KIND
-                ? buildListeningRenderer({
+        if (rendererKind === TECAI_SPEAKING_KIND) {
+          const generatedSpeakingQuiz = await buildTecaiSpeakingQuizFromDocx(file, {
+            attemptLimit: Math.max(1, Number(payload.attempt_limit || 1) || 1),
+            examType:
+              examMetadata.exam_type ||
+              examMetadata.examType ||
+              examMetadata.exam_family ||
+              examMetadata.examFamily ||
+              selectedSubcategory.name ||
+              moduleItem.moduleName,
+            allowRerecord: examMetadata.allow_rerecord !== false,
+            voiceId: examMetadata.voice?.voice_id || examMetadata.voice_id || null
+          });
+          quiz = {
+            mode: generatedSpeakingQuiz.mode,
+            attemptLimit: generatedSpeakingQuiz.attemptLimit,
+            questions: [],
+            renderer: generatedSpeakingQuiz.renderer
+          };
+          parsedExamParts = normalizeExamParts(generatedSpeakingQuiz.examParts);
+        } else {
+          quiz = {
+            mode: "written",
+            attemptLimit: Math.max(1, Number(payload.attempt_limit || 999) || 999),
+            questions: [],
+            renderer:
+              rendererKind === TECAI_READING_KIND
+                ? buildReadingRenderer({ timerSeconds })
+                : rendererKind === TECAI_LISTENING_KIND
+                  ? buildListeningRenderer({
                     timerSeconds,
                     audioUrl: payload.external_url || "",
                     promptFileUrl: upload?.fileUrl || "",
                     instructions: payload.instructions || ""
                   })
-                : {
+                  : {
                     kind: TECAI_WRITING_KIND,
                     timer_seconds:
                       Math.max(0, Number(timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS),
                     blocks: []
                   }
-        };
+          };
+        }
       }
       if (quiz && payload.attempt_limit !== undefined) {
         quiz.attemptLimit = Math.max(0, Number(payload.attempt_limit) || 0);
@@ -1040,7 +1275,17 @@ const createReusableContent = async (payload, file, tenant, user) => {
         moduleItem,
         rendererKind: quiz?.renderer?.kind || rendererKind,
         timerSeconds: quiz?.renderer?.timer_seconds || timerSeconds,
-        parts: parsedExamParts
+        parts: parsedExamParts,
+        metadata: {
+          ...examMetadata,
+          ...(quiz?.renderer?.kind === TECAI_SPEAKING_KIND
+            ? {
+              voice: quiz.renderer.voice || null,
+              allow_rerecord: quiz.renderer.allow_rerecord !== false,
+              instruction_audio_asset: quiz.renderer.instruction_audio_asset || null
+            }
+            : {})
+        }
       });
     }
 
@@ -1074,7 +1319,7 @@ const createReusableContent = async (payload, file, tenant, user) => {
       profile: {
         category,
         instructions: payload.instructions,
-        responseType: payload.response_type,
+        responseType: resolvedResponseType,
         quiz,
         exam: examProfile
       }
@@ -1139,6 +1384,9 @@ const updateReusableContent = async (id, payload, file, tenant, currentUser) => 
   const nextType = payload.type ?? content.type;
   const nextDescription = payload.description ?? content.description;
   const nextCategory = inferModuleCategory(moduleItem);
+  const nextExamMetadata =
+    parseOptionalJson(payload.exam_metadata, "exam_metadata") ?? content.profile?.exam?.metadata ?? {};
+  const nextResponseType = nextCategory === "speaking" ? "audio" : payload.response_type ?? content.profile?.responseType;
   const nextSubcategory = resolveModuleSubcategorySelection(moduleItem, payload, {
     id: content.moduleSubcategoryId,
     name: content.moduleSubcategoryName
@@ -1152,14 +1400,16 @@ const updateReusableContent = async (id, payload, file, tenant, currentUser) => 
         ? TECAI_READING_KIND
         : nextCategory === "listening"
           ? TECAI_LISTENING_KIND
-          : "custom");
+          : nextCategory === "speaking"
+            ? TECAI_SPEAKING_KIND
+            : "custom");
   const nextTimerSeconds =
     Math.max(0, Number(payload.timer_seconds || 0) || 0) ||
     Math.max(0, Number(payload.duration ?? content.duration ?? 0) * 60 || 0) ||
     content.profile?.exam?.timerSeconds ||
     content.profile?.quiz?.renderer?.timer_seconds ||
     DEFAULT_TIMER_SECONDS;
-  const parsedExamParts = normalizeExamParts(
+  let parsedExamParts = normalizeExamParts(
     parseOptionalJson(payload.exam_parts, "exam_parts") ?? content.profile?.exam?.parts ?? []
   );
   let nextQuiz = null;
@@ -1182,6 +1432,23 @@ const updateReusableContent = async (id, payload, file, tenant, currentUser) => 
         } else {
           nextQuiz = content.profile?.quiz || null;
         }
+      } else if (nextRendererKind === TECAI_SPEAKING_KIND || nextCategory === "speaking") {
+        if (parsedExamParts.length) {
+          nextQuiz = {
+            mode: "written",
+            attemptLimit: Math.max(1, Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 1) || 1),
+            questions: [],
+            renderer: buildSpeakingRenderer({
+              instructions:
+                payload.instructions !== undefined ? payload.instructions || "" : content.profile?.instructions || "",
+              timerSeconds: nextTimerSeconds,
+              parts: parsedExamParts,
+              metadata: nextExamMetadata
+            })
+          };
+        } else {
+          nextQuiz = content.profile?.quiz || null;
+        }
       } else {
         nextQuiz = content.profile?.quiz || null;
       }
@@ -1193,31 +1460,54 @@ const updateReusableContent = async (id, payload, file, tenant, currentUser) => 
     nextType === "quiz" &&
     (nextRendererKind === TECAI_READING_KIND ||
       nextRendererKind === TECAI_WRITING_KIND ||
-      nextRendererKind === TECAI_LISTENING_KIND) &&
+      nextRendererKind === TECAI_LISTENING_KIND ||
+      nextRendererKind === TECAI_SPEAKING_KIND) &&
     (file || content.fileUrl || (nextRendererKind === TECAI_LISTENING_KIND && nextExternalUrl))
   ) {
-    nextQuiz = {
-      mode: "written",
-      attemptLimit: Math.max(1, Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 999) || 999),
-      questions: [],
-      renderer:
-        nextRendererKind === TECAI_READING_KIND
-          ? buildReadingRenderer({ timerSeconds: nextTimerSeconds })
-          : nextRendererKind === TECAI_LISTENING_KIND
-            ? buildListeningRenderer({
+    if (nextRendererKind === TECAI_SPEAKING_KIND && file) {
+      const generatedSpeakingQuiz = await buildTecaiSpeakingQuizFromDocx(file, {
+        attemptLimit: Math.max(1, Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 1) || 1),
+        examType:
+          nextExamMetadata.exam_type ||
+          nextExamMetadata.examType ||
+          nextExamMetadata.exam_family ||
+          nextExamMetadata.examFamily ||
+          nextSubcategory.name ||
+          moduleItem.moduleName,
+        allowRerecord: nextExamMetadata.allow_rerecord !== false,
+        voiceId: nextExamMetadata.voice?.voice_id || nextExamMetadata.voice_id || null
+      });
+      nextQuiz = {
+        mode: generatedSpeakingQuiz.mode,
+        attemptLimit: generatedSpeakingQuiz.attemptLimit,
+        questions: [],
+        renderer: generatedSpeakingQuiz.renderer
+      };
+      parsedExamParts = normalizeExamParts(generatedSpeakingQuiz.examParts);
+    } else {
+      nextQuiz = {
+        mode: "written",
+        attemptLimit: Math.max(1, Number(payload.attempt_limit ?? content.profile?.quiz?.attemptLimit ?? 999) || 999),
+        questions: [],
+        renderer:
+          nextRendererKind === TECAI_READING_KIND
+            ? buildReadingRenderer({ timerSeconds: nextTimerSeconds })
+            : nextRendererKind === TECAI_LISTENING_KIND
+              ? buildListeningRenderer({
                 timerSeconds: nextTimerSeconds,
                 audioUrl: nextExternalUrl || "",
                 promptFileUrl: nextFileUrl || "",
                 instructions:
                   payload.instructions !== undefined ? payload.instructions || "" : content.profile?.instructions || ""
               })
-            : {
+              : {
                 kind: TECAI_WRITING_KIND,
                 timer_seconds:
                   Math.max(0, Number(nextTimerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS),
                 blocks: []
               }
-    };
+      };
+    }
   }
 
   if (
@@ -1233,6 +1523,19 @@ const updateReusableContent = async (id, payload, file, tenant, currentUser) => 
     throw new AppError("Writing exams require a DOCX file or at least one task in exam_parts.", 400);
   }
 
+  if (
+    nextType === "quiz" &&
+    (nextRendererKind === TECAI_SPEAKING_KIND || nextCategory === "speaking") &&
+    !file &&
+    !parsedExamParts.length &&
+    !content.profile?.quiz
+  ) {
+    if (uploaded?.storageKey) {
+      await deleteFile(uploaded.storageKey);
+    }
+    throw new AppError("Speaking exams require a DOCX file or at least one part in exam_parts.", 400);
+  }
+
   if (nextQuiz && payload.attempt_limit !== undefined) {
     nextQuiz.attemptLimit = Math.max(0, Number(payload.attempt_limit) || 0);
   }
@@ -1240,20 +1543,30 @@ const updateReusableContent = async (id, payload, file, tenant, currentUser) => 
   const nextExamProfile =
     nextType === "quiz"
       ? buildExamProfile({
-          payload: {
-            ...payload,
-            exam_type_id: payload.exam_type_id || content.profile?.exam?.examTypeId || moduleItem.subcourseId,
-            category: nextCategory,
-            exam_metadata:
-              payload.exam_metadata !== undefined
-                ? payload.exam_metadata
-                : JSON.stringify(content.profile?.exam?.metadata || null)
-          },
-          moduleItem,
-          rendererKind: nextQuiz?.renderer?.kind || nextRendererKind,
-          timerSeconds: nextQuiz?.renderer?.timer_seconds || nextTimerSeconds,
-          parts: parsedExamParts
-        })
+        payload: {
+          ...payload,
+          exam_type_id: payload.exam_type_id || content.profile?.exam?.examTypeId || moduleItem.subcourseId,
+          category: nextCategory,
+          exam_metadata:
+            payload.exam_metadata !== undefined
+              ? payload.exam_metadata
+              : JSON.stringify(content.profile?.exam?.metadata || null)
+        },
+        moduleItem,
+        rendererKind: nextQuiz?.renderer?.kind || nextRendererKind,
+        timerSeconds: nextQuiz?.renderer?.timer_seconds || nextTimerSeconds,
+        parts: parsedExamParts,
+        metadata: {
+          ...nextExamMetadata,
+          ...(nextQuiz?.renderer?.kind === TECAI_SPEAKING_KIND
+            ? {
+              voice: nextQuiz.renderer.voice || null,
+              allow_rerecord: nextQuiz.renderer.allow_rerecord !== false,
+              instruction_audio_asset: nextQuiz.renderer.instruction_audio_asset || null
+            }
+            : {})
+        }
+      })
       : null;
 
   try {
@@ -1288,7 +1601,7 @@ const updateReusableContent = async (id, payload, file, tenant, currentUser) => 
   content.storageKey = nextStorageKey;
   content.profile.category = nextCategory;
   if (payload.instructions !== undefined) content.profile.instructions = payload.instructions;
-  if (payload.response_type !== undefined) content.profile.responseType = payload.response_type;
+  content.profile.responseType = nextResponseType;
   content.profile.quiz = nextQuiz;
   content.profile.exam = nextExamProfile;
 

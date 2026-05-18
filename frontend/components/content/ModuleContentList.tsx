@@ -76,7 +76,10 @@ export function ModuleContentList({
   }));
 
   const generatedPreviewContent =
-    selectedContent && form?.type === "quiz" && previewUrl
+    selectedContent &&
+    form?.type === "quiz" &&
+    previewUrl &&
+    (form.category === "reading" || form.category === "writing")
       ? {
           ...selectedContent,
           title: form.title || selectedContent.title,
@@ -123,7 +126,8 @@ export function ModuleContentList({
                   />
                   {content.type === "quiz" &&
                   (content.category === "reading" ||
-                    content.category === "writing") ? (
+                    content.category === "writing" ||
+                    content.category === "speaking") ? (
                     <IconButton
                       icon={<Eye className="h-4 w-4" />}
                       label={`Preview ${content.title}`}
@@ -295,7 +299,8 @@ export function ModuleContentList({
 
                 {generatedPreviewContent ||
                 selectedContent.category === "reading" ||
-                selectedContent.category === "writing" ? (
+                selectedContent.category === "writing" ||
+                selectedContent.category === "speaking" ? (
                   <div className="rounded-xl border border-slate-200 bg-white p-4">
                     <p className="text-sm text-slate-600">
                       Open the exact preview in a new tab to verify layout, content rendering, inputs, and timer behavior.
@@ -315,7 +320,8 @@ export function ModuleContentList({
                         </Button>
                       ) : null}
                       {selectedContent.category === "reading" ||
-                      selectedContent.category === "writing" ? (
+                      selectedContent.category === "writing" ||
+                      selectedContent.category === "speaking" ? (
                         <Button
                           type="button"
                           variant="secondary"

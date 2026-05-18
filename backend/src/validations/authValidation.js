@@ -17,8 +17,7 @@ exports.loginSchema = Joi.object({
 
 exports.verifyRegistrationSchema = Joi.object({
   verification_id: Joi.string().required(),
-  email_otp: Joi.string().length(6).required(),
-  mobile_otp: Joi.string().length(6).required()
+  email_otp: Joi.string().length(6).required()
 });
 
 exports.forgotPasswordSchema = Joi.object({

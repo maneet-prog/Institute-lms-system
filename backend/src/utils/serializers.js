@@ -164,7 +164,8 @@ const serializeContent = (content, options = {}) => ({
       Array.isArray(content.profile.quiz.questions) ||
       content.profile.quiz.renderer?.kind === "tecai_reading" ||
       content.profile.quiz.renderer?.kind === "tecai_writing" ||
-      content.profile.quiz.renderer?.kind === "tecai_listening"
+      content.profile.quiz.renderer?.kind === "tecai_listening" ||
+      content.profile.quiz.renderer?.kind === "tecai_speaking"
     )
       ? {
           mode: content.profile.quiz.mode || "mcq",
@@ -252,6 +253,12 @@ const serializeStudentSubmission = (submission) => ({
     response_url: attempt.responseUrl ?? null,
     renderer_kind: attempt.rendererKind ?? null,
     time_taken_seconds: attempt.timeTakenSeconds ?? 0,
+    transcript_text: attempt.transcriptText ?? null,
+    ai_evaluation: attempt.aiEvaluation ?? null,
+    fluency_score: attempt.fluencyScore ?? null,
+    grammar_score: attempt.grammarScore ?? null,
+    pronunciation_score: attempt.pronunciationScore ?? null,
+    vocabulary_score: attempt.vocabularyScore ?? null,
     auto_score: attempt.autoScore ?? 0,
     awarded_marks: attempt.awardedMarks ?? null,
     max_score: attempt.maxScore ?? 0,
@@ -264,9 +271,18 @@ const serializeStudentSubmission = (submission) => ({
       part_id: response.partId ?? null,
       question_id: response.questionId ?? null,
       response_text: response.responseText ?? null,
+      response_url: response.responseUrl ?? null,
+      storage_key: response.storageKey ?? null,
       response_data: response.responseData ?? null,
       word_count: response.wordCount ?? 0,
-      duration_seconds: response.durationSeconds ?? 0
+      duration_seconds: response.durationSeconds ?? 0,
+      transcript: response.transcript ?? null,
+      evaluation: response.evaluation ?? null,
+      score: response.score ?? null,
+      fluency_score: response.fluencyScore ?? null,
+      grammar_score: response.grammarScore ?? null,
+      pronunciation_score: response.pronunciationScore ?? null,
+      vocabulary_score: response.vocabularyScore ?? null
     })),
     answers: (attempt.answers || []).map((answer) => ({
       question_id: answer.questionId,

@@ -131,12 +131,13 @@ export function AddContentForm({
     }));
   }, [selectedModule]);
 
-  const supportsDocxGenerator = content.category === "reading" || content.category === "writing";
+  const supportsDocxGenerator =
+    content.category === "reading" || content.category === "writing" || content.category === "speaking";
   const supportsListeningGenerator = content.category === "listening";
   const supportsExamCreation = supportsDocxGenerator || supportsListeningGenerator;
 
   const quizPreviewContent =
-    supportsDocxGenerator && previewUrl
+    (content.category === "reading" || content.category === "writing") && previewUrl
       ? {
           content_id: "preview-quiz",
           institute_id: instituteId ?? "",
@@ -229,6 +230,8 @@ export function AddContentForm({
             ? "tecai_reading"
             : content.category === "listening"
               ? "tecai_listening"
+              : content.category === "speaking"
+                ? "tecai_speaking"
               : undefined,
       external_url: supportsListeningGenerator ? content.external_url.trim() : undefined,
       file: content.file
@@ -449,18 +452,26 @@ export function AddContentForm({
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-slate-900">
-                {supportsListeningGenerator
-                  ? "Listening Exam Creator"
-                  : `DOCX ${content.category === "writing" ? "Writing" : "Reading"} Exam Generator`}
-              </p>
-              <p className="mt-1 text-sm text-slate-500">
-                {supportsListeningGenerator
-                  ? "Provide the listening audio link and upload the prompt file before saving."
-                  : `Upload the TECAI DOCX template and generate a preview of the rendered ${content.category} test before saving.`}
-              </p>
-            </div>
-            {!supportsListeningGenerator ? (
+                <p className="text-sm font-semibold text-slate-900">
+                  {supportsListeningGenerator
+                    ? "Listening Exam Creator"
+                    : `DOCX ${
+                        content.category === "writing"
+                          ? "Writing"
+                          : content.category === "speaking"
+                            ? "Speaking"
+                            : "Reading"
+                      } Exam Generator`}
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {supportsListeningGenerator
+                    ? "Provide the listening audio link and upload the prompt file before saving."
+                    : content.category === "speaking"
+                      ? "Upload a DOCX file with TECAI speaking tags. The backend will parse the prompts, generate audio, and build the timed speaking flow."
+                      : `Upload the TECAI DOCX template and generate a preview of the rendered ${content.category} test before saving.`}
+                </p>
+              </div>
+            {!supportsListeningGenerator && content.category !== "speaking" ? (
               <Button
                 type="button"
                 variant="secondary"
@@ -540,6 +551,11 @@ export function AddContentForm({
               >
                 Open Exact Preview
               </Button>
+            </div>
+          ) : null}
+          {content.category === "speaking" ? (
+            <div className="mt-4 rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm text-teal-950">
+              Saved speaking exams can be previewed immediately from the module content list after creation, including generated audio prompts and recording flow.
             </div>
           ) : null}
         </div>

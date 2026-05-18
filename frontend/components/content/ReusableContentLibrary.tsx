@@ -117,7 +117,10 @@ export function ReusableContentLibrary({
   }, [targetStudents, modalSearchQuery]);
 
   const generatedPreviewContent =
-    selectedContent && form?.type === "quiz" && previewUrl
+    selectedContent &&
+    form?.type === "quiz" &&
+    previewUrl &&
+    (form.category === "reading" || form.category === "writing")
       ? {
           ...selectedContent,
           title: form.title || selectedContent.title,
@@ -419,7 +422,8 @@ export function ReusableContentLibrary({
               </Button>
               {generatedPreviewContent ||
               selectedContent.category === "reading" ||
-              selectedContent.category === "writing" ? (
+              selectedContent.category === "writing" ||
+              selectedContent.category === "speaking" ? (
                 <Button
                   type="button"
                   variant="secondary"

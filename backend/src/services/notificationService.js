@@ -1,4 +1,16 @@
 const env = require("../config/env");
+const nodemailer = require("nodemailer");
+
+let transporter = null;
+if (env.nodemailer.user && env.nodemailer.appPassword) {
+  transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: env.nodemailer.user,
+      pass: env.nodemailer.appPassword
+    }
+  });
+}
 
 async function postJson(url, payload, headers = {}) {
   if (!url || typeof fetch !== "function") {
@@ -25,6 +37,22 @@ async function postJson(url, payload, headers = {}) {
 async function sendMail({ to, subject, text, html, metadata }) {
   if (!to) {
     return { delivered: false };
+  }
+
+  if (transporter) {
+    try {
+      await transporter.sendMail({
+        from: env.nodemailer.user,
+        to,
+        subject,
+        text,
+        html
+      });
+      return { delivered: true };
+    } catch (error) {
+      console.error("Nodemailer delivery failed", error);
+      throw new Error(`Notification delivery failed: ${error.message}`);
+    }
   }
 
   if (env.mail.apiUrl) {

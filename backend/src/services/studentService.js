@@ -7,9 +7,16 @@ const { UserBatch, UserCourse, UserModule, UserContent } = require("../models/En
 const AppError = require("../utils/AppError");
 const { serializeContent, serializeStudentSubmission } = require("../utils/serializers");
 const { gradeQuizSubmission, resolveQuizFromContent } = require("../utils/quiz");
-const { TECAI_READING_KIND, TECAI_WRITING_KIND, TECAI_LISTENING_KIND } = require("../utils/tecaiReading");
+const {
+  TECAI_READING_KIND,
+  TECAI_WRITING_KIND,
+  TECAI_LISTENING_KIND,
+  TECAI_SPEAKING_KIND
+} = require("../utils/tecaiReading");
 const { isContentVisibleToStudent } = require("./contentVisibilityService");
 const { markContentCompletedForStudent } = require("./progressTrackingService");
+const { uploadFile } = require("./storageService");
+const { transcribeAudio, evaluateTranscript } = require("./openAiSpeakingService");
 
 const getInstituteId = (user, tenant) => tenant?.instituteId || user?.instituteId || null;
 const average = (values) =>
@@ -573,6 +580,251 @@ const markSubmittedContentComplete = async ({ instituteId, userId, content }) =>
     completed: true
   });
 
+const normalizeExamResponsePayload = (response) => ({
+  partId: response.part_id || response.partId || null,
+  questionId: response.question_id || response.questionId || null,
+  responseText: response.response_text || response.responseText || null,
+  responseUrl:
+    response.response_url ||
+    response.responseUrl ||
+    response.response_data?.audio_url ||
+    response.responseData?.audio_url ||
+    response.response_data?.response_url ||
+    response.responseData?.response_url ||
+    null,
+  storageKey:
+    response.storage_key ||
+    response.storageKey ||
+    response.response_data?.storage_key ||
+    response.responseData?.storage_key ||
+    null,
+  responseData: response.response_data || response.responseData || null,
+  wordCount: Number(response.word_count || response.wordCount || 0) || 0,
+  durationSeconds: Number(response.duration_seconds || response.durationSeconds || 0) || 0
+});
+
+const getSpeakingScaleMax = (content, renderer) => {
+  const meta = content.profile?.exam?.metadata || {};
+  const examType = String(
+    meta.exam_type ||
+      meta.examType ||
+      meta.exam_family ||
+      meta.examFamily ||
+      renderer?.exam_type ||
+      content.profile?.category ||
+      "general"
+  ).toLowerCase();
+
+  if (Number.isFinite(Number(meta.scale_max))) {
+    return Number(meta.scale_max);
+  }
+
+  return examType.includes("pte") ? 90 : 9;
+};
+
+const buildSpeakingQuestionMap = (renderer) => {
+  const mapping = new Map();
+  (renderer?.parts || []).forEach((part) => {
+    (part.questions || []).forEach((question) => {
+      mapping.set(String(question.question_id || ""), {
+        partId: part.part_id || null,
+        partTitle: part.title || "",
+        prompt: question.prompt || "",
+        instructions: question.instructions || "",
+        prepSeconds: Number(question.prep_seconds || 0) || 0,
+        recordSeconds: Number(question.record_seconds || 0) || 0
+      });
+    });
+  });
+  return mapping;
+};
+
+const averageNumber = (values) => {
+  const numeric = values.filter((value) => Number.isFinite(Number(value)));
+  if (!numeric.length) return 0;
+  return Math.round((numeric.reduce((sum, value) => sum + Number(value), 0) / numeric.length) * 100) / 100;
+};
+
+const evaluateSpeakingAttempt = async ({ content, renderer, examResponses }) => {
+  const questionMap = buildSpeakingQuestionMap(renderer);
+  const scaleMax = getSpeakingScaleMax(content, renderer);
+  const evaluatedResponses = [];
+  const feedbackItems = [];
+  const suggestionItems = [];
+
+  for (const rawResponse of examResponses) {
+    const normalized = normalizeExamResponsePayload(rawResponse);
+    const questionMeta = questionMap.get(String(normalized.questionId || "")) || {};
+    const audioSourceUrl =
+      normalized.responseUrl ||
+      normalized.responseData?.audio_url ||
+      normalized.responseData?.response_url ||
+      null;
+    const audioStorageKey =
+      normalized.storageKey ||
+      normalized.responseData?.storage_key ||
+      null;
+
+    let transcriptResult = { transcript: null, status: "missing" };
+    let evaluation = {
+      status: "missing",
+      overall_score: 0,
+      fluency: 0,
+      grammar: 0,
+      pronunciation: 0,
+      vocabulary: 0,
+      feedback: "",
+      strengths: [],
+      improvement_suggestions: [],
+      scale_max: scaleMax
+    };
+
+    if (audioSourceUrl || audioStorageKey) {
+      try {
+        transcriptResult = await transcribeAudio({
+          responseUrl: audioSourceUrl,
+          storageKey: audioStorageKey
+        });
+      } catch (error) {
+        transcriptResult = {
+          transcript: null,
+          status: "error",
+          reason: error.message
+        };
+      }
+
+      if (transcriptResult.transcript) {
+        try {
+          evaluation = await evaluateTranscript({
+            transcript: transcriptResult.transcript,
+            prompt: questionMeta.prompt || "",
+            instructions: questionMeta.instructions || "",
+            examType: renderer?.exam_type || content.profile?.category || "speaking",
+            questionLabel: questionMeta.partTitle || questionMeta.partId || normalized.questionId || "",
+            scaleMax
+          });
+        } catch (error) {
+          evaluation = {
+            status: "error",
+            overall_score: 0,
+            fluency: 0,
+            grammar: 0,
+            pronunciation: 0,
+            vocabulary: 0,
+            feedback: error.message,
+            strengths: [],
+            improvement_suggestions: [],
+            scale_max: scaleMax
+          };
+        }
+      }
+    }
+
+    if (evaluation.feedback) {
+      feedbackItems.push(evaluation.feedback);
+    }
+    suggestionItems.push(...(evaluation.improvement_suggestions || []));
+
+    evaluatedResponses.push({
+      partId: normalized.partId || questionMeta.partId || null,
+      questionId: normalized.questionId,
+      responseText: transcriptResult.transcript || normalized.responseText || null,
+      responseUrl: audioSourceUrl,
+      storageKey: audioStorageKey,
+      responseData: {
+        ...(normalized.responseData || {}),
+        prompt: questionMeta.prompt || "",
+        part_title: questionMeta.partTitle || "",
+        prep_seconds: questionMeta.prepSeconds || 0,
+        record_seconds: questionMeta.recordSeconds || 0
+      },
+      wordCount:
+        normalized.wordCount ||
+        (transcriptResult.transcript ? transcriptResult.transcript.split(/\s+/).filter(Boolean).length : 0),
+      durationSeconds: normalized.durationSeconds,
+      transcript: transcriptResult.transcript || null,
+      evaluation,
+      score: evaluation.overall_score || 0,
+      fluencyScore: evaluation.fluency || 0,
+      grammarScore: evaluation.grammar || 0,
+      pronunciationScore: evaluation.pronunciation || 0,
+      vocabularyScore: evaluation.vocabulary || 0
+    });
+  }
+
+  const transcriptText = evaluatedResponses
+    .map((response, index) =>
+      response.transcript
+        ? `Q${index + 1}: ${response.transcript}`
+        : `Q${index + 1}: [No transcript available]`
+    )
+    .join("\n\n");
+
+  const overallScore = averageNumber(evaluatedResponses.map((response) => response.score));
+  const summary = {
+    status: evaluatedResponses.every((response) => response.evaluation?.status === "completed")
+      ? "completed"
+      : evaluatedResponses.some((response) => response.evaluation?.status === "error")
+        ? "partial"
+        : "pending",
+    scale_max: scaleMax,
+    overall_score: overallScore,
+    fluency: averageNumber(evaluatedResponses.map((response) => response.fluencyScore)),
+    grammar: averageNumber(evaluatedResponses.map((response) => response.grammarScore)),
+    pronunciation: averageNumber(evaluatedResponses.map((response) => response.pronunciationScore)),
+    vocabulary: averageNumber(evaluatedResponses.map((response) => response.vocabularyScore)),
+    feedback: feedbackItems.join("\n\n").trim(),
+    improvement_suggestions: [...new Set(suggestionItems.filter(Boolean).map(String))],
+    question_breakdown: evaluatedResponses.map((response) => ({
+      question_id: response.questionId,
+      transcript: response.transcript,
+      evaluation: response.evaluation
+    }))
+  };
+
+  return {
+    responses: evaluatedResponses,
+    transcriptText,
+    summary,
+    autoScore: overallScore,
+    maxScore: scaleMax,
+    fluencyScore: summary.fluency,
+    grammarScore: summary.grammar,
+    pronunciationScore: summary.pronunciation,
+    vocabularyScore: summary.vocabulary
+  };
+};
+
+const uploadSpeakingResponseAudio = async ({ file, user, tenant, contentId }) => {
+  const instituteId = getInstituteId(user, tenant);
+  if (!instituteId) {
+    throw new AppError("User institute is not configured.", 403);
+  }
+  if (!file?.buffer) {
+    throw new AppError("Upload an audio file.", 400);
+  }
+  if (!String(file.mimetype || "").toLowerCase().startsWith("audio/")) {
+    throw new AppError("Only audio uploads are allowed for speaking submissions.", 400);
+  }
+
+  const upload = await uploadFile(file, [
+    "institutes",
+    instituteId,
+    "students",
+    String(user._id),
+    "speaking-submissions",
+    contentId || "general"
+  ]);
+
+  return {
+    audio_url: upload.fileUrl,
+    storage_key: upload.storageKey,
+    mime_type: file.mimetype,
+    original_name: file.originalname,
+    size_bytes: file.size || file.buffer.length
+  };
+};
+
 const submitContent = async (payload, user, tenant) => {
   const instituteId = getInstituteId(user, tenant);
   if (!instituteId) {
@@ -628,6 +880,71 @@ const submitContent = async (payload, user, tenant) => {
 
     const attemptNumber = currentAttemptCount + 1;
 
+    if (quiz.renderer?.kind === TECAI_SPEAKING_KIND) {
+      if (!Array.isArray(payload.exam_responses) || !payload.exam_responses.length) {
+        throw new AppError("Speaking recordings are missing for this submission.", 400);
+      }
+
+      const evaluatedAttempt = await evaluateSpeakingAttempt({
+        content,
+        renderer: quiz.renderer,
+        examResponses: payload.exam_responses
+      });
+
+      const attempt = {
+        attemptNumber,
+        responseType: "quiz",
+        responseText: evaluatedAttempt.transcriptText || null,
+        responseUrl: evaluatedAttempt.responses[0]?.responseUrl || null,
+        answers: [],
+        examResponses: evaluatedAttempt.responses,
+        rendererKind: TECAI_SPEAKING_KIND,
+        timeTakenSeconds: Number(payload.time_taken_seconds || 0) || 0,
+        transcriptText: evaluatedAttempt.transcriptText || null,
+        aiEvaluation: evaluatedAttempt.summary,
+        fluencyScore: evaluatedAttempt.fluencyScore,
+        grammarScore: evaluatedAttempt.grammarScore,
+        pronunciationScore: evaluatedAttempt.pronunciationScore,
+        vocabularyScore: evaluatedAttempt.vocabularyScore,
+        autoScore: evaluatedAttempt.autoScore,
+        awardedMarks: null,
+        maxScore: evaluatedAttempt.maxScore,
+        status: "submitted",
+        feedback: null,
+        reviewedAt: null,
+        reviewedBy: null,
+        submittedAt: new Date()
+      };
+
+      const submission = existingSubmission || new StudentSubmission({
+        instituteId,
+        contentId: payload.content_id,
+        userId: user._id
+      });
+
+      submission.responseType = "quiz";
+      submission.responseText = evaluatedAttempt.transcriptText || null;
+      submission.responseUrl = evaluatedAttempt.responses[0]?.responseUrl || null;
+      submission.submissionKind = "quiz";
+      submission.attempts = [...(submission.attempts || []), attempt];
+      submission.latestAttemptNumber = attemptNumber;
+      submission.latestAutoScore = evaluatedAttempt.autoScore;
+      submission.latestAwardedMarks = null;
+      submission.maxScore = evaluatedAttempt.maxScore;
+      submission.reviewStatus = "pending";
+      submission.feedback = null;
+      submission.reviewedAt = null;
+      submission.reviewedBy = null;
+      submission.submittedAt = attempt.submittedAt;
+      await submission.save();
+      await markSubmittedContentComplete({
+        instituteId,
+        userId: user._id,
+        content
+      });
+      return serializeStudentSubmission(submission);
+    }
+
     if (quiz.renderer?.kind === TECAI_READING_KIND || quiz.renderer?.kind === TECAI_LISTENING_KIND) {
       if (!(payload.response_text || "").trim()) {
         throw new AppError("Exam answers are missing for this submission.", 400);
@@ -639,14 +956,7 @@ const submitContent = async (payload, user, tenant) => {
         responseText: payload.response_text,
         responseUrl: null,
         answers: [],
-        examResponses: (payload.exam_responses || []).map((response) => ({
-          partId: response.part_id || response.partId || null,
-          questionId: response.question_id || response.questionId || null,
-          responseText: response.response_text || response.responseText || null,
-          responseData: response.response_data || response.responseData || null,
-          wordCount: Number(response.word_count || response.wordCount || 0) || 0,
-          durationSeconds: Number(response.duration_seconds || response.durationSeconds || 0) || 0
-        })),
+        examResponses: (payload.exam_responses || []).map(normalizeExamResponsePayload),
         rendererKind: quiz.renderer?.kind || null,
         timeTakenSeconds: Number(payload.time_taken_seconds || 0) || 0,
         autoScore: 0,
@@ -699,14 +1009,7 @@ const submitContent = async (payload, user, tenant) => {
         responseText: payload.response_text,
         responseUrl: null,
         answers: [],
-        examResponses: (payload.exam_responses || []).map((response) => ({
-          partId: response.part_id || response.partId || null,
-          questionId: response.question_id || response.questionId || null,
-          responseText: response.response_text || response.responseText || null,
-          responseData: response.response_data || response.responseData || null,
-          wordCount: Number(response.word_count || response.wordCount || 0) || 0,
-          durationSeconds: Number(response.duration_seconds || response.durationSeconds || 0) || 0
-        })),
+        examResponses: (payload.exam_responses || []).map(normalizeExamResponsePayload),
         rendererKind: TECAI_WRITING_KIND,
         timeTakenSeconds: Number(payload.time_taken_seconds || 0) || 0,
         autoScore: 0,
@@ -848,5 +1151,6 @@ module.exports = {
   getStudentBatches,
   getDashboard,
   getBatchWorkspace,
-  submitContent
+  submitContent,
+  uploadSpeakingResponseAudio
 };

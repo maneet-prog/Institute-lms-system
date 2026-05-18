@@ -34,7 +34,7 @@ export default function TecaiSavedExamPage() {
       submission={data.submission}
       studentName={data.student_name}
       autoStart={autoStart}
-      allowSave={Object.prototype.hasOwnProperty.call(data, "submission")}
+      allowSave={data.submission !== undefined}
     />
   );
 }

@@ -27,19 +27,13 @@ export interface RegistrationStartResponse {
       text: string;
       html: string;
     } | null;
-    sms_preview?: {
-      to: string;
-      message: string;
-    } | null;
     email_otp?: string;
-    mobile_otp?: string;
   };
 }
 
 export interface RegistrationVerifyPayload {
   verification_id: string;
   email_otp: string;
-  mobile_otp: string;
 }
 
 export interface RegistrationVerifyResponse {

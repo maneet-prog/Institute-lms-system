@@ -109,6 +109,7 @@ exports.contentUpdateSchema = Joi.object({
       "tecai_reading",
       "tecai_writing",
       "tecai_listening",
+      "tecai_speaking",
       "structured_reading",
       "structured_writing",
       "custom"
@@ -149,6 +150,7 @@ exports.reusableContentSchema = Joi.object({
       "tecai_reading",
       "tecai_writing",
       "tecai_listening",
+      "tecai_speaking",
       "structured_reading",
       "structured_writing",
       "custom"
@@ -180,6 +182,7 @@ exports.reusableContentUpdateSchema = Joi.object({
       "tecai_reading",
       "tecai_writing",
       "tecai_listening",
+      "tecai_speaking",
       "structured_reading",
       "structured_writing",
       "custom"

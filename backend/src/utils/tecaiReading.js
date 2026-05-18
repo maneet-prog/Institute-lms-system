@@ -1,16 +1,64 @@
 const JSZip = require("jszip");
 const { DOMParser } = require("@xmldom/xmldom");
+
 const AppError = require("./AppError");
+const { synthesizeSpeech } = require("../services/elevenLabsService");
 
 const TECAI_READING_KIND = "tecai_reading";
 const TECAI_WRITING_KIND = "tecai_writing";
 const TECAI_LISTENING_KIND = "tecai_listening";
+const TECAI_SPEAKING_KIND = "tecai_speaking";
 const DEFAULT_TIMER_SECONDS = 3600;
+
+const normalizeZipPath = (value = "") => String(value).replace(/\\/g, "/").replace(/^\/+/, "");
+const getZipFile = (zip, targetPath) => {
+  const normalizedTarget = normalizeZipPath(targetPath);
+  const direct = zip.file(normalizedTarget);
+  if (direct) {
+    return direct;
+  }
+
+  const matches = Object.values(zip.files || {}).filter(
+    (entry) => normalizeZipPath(entry.name) === normalizedTarget
+  );
+  return matches[0] || null;
+};
 
 const normalizeParagraph = (paragraph) => ({
   type: paragraph?.type === "table" ? "table" : "p",
   html: typeof paragraph?.html === "string" ? paragraph.html : "",
   text: typeof paragraph?.text === "string" ? paragraph.text : ""
+});
+
+const normalizeAudioAsset = (asset) =>
+  asset
+    ? {
+        asset_id: String(asset.asset_id || asset.assetId || ""),
+        type: "audio",
+        title: typeof asset.title === "string" ? asset.title : "",
+        url: typeof asset.url === "string" ? asset.url : "",
+        mime_type: typeof asset.mime_type === "string" ? asset.mime_type : "audio/mpeg",
+        meta: asset.meta && typeof asset.meta === "object" ? asset.meta : null
+      }
+    : null;
+
+const sanitizeSpeakingPart = (part, index) => ({
+  part_id: String(part?.part_id || part?.partId || `part-${index + 1}`),
+  title: String(part?.title || `Part ${index + 1}`),
+  kind: String(part?.kind || "section"),
+  instructions: typeof part?.instructions === "string" ? part.instructions : "",
+  instruction_audio_asset: normalizeAudioAsset(part?.instruction_audio_asset || part?.instructionAudioAsset),
+  questions: Array.isArray(part?.questions)
+    ? part.questions.map((question, questionIndex) => ({
+        question_id: String(question?.question_id || question?.questionId || `question-${index + 1}-${questionIndex + 1}`),
+        prompt: typeof question?.prompt === "string" ? question.prompt : "",
+        instructions: typeof question?.instructions === "string" ? question.instructions : "",
+        prep_seconds: Math.max(0, Number(question?.prep_seconds || question?.prepSeconds || 0) || 0),
+        record_seconds: Math.max(0, Number(question?.record_seconds || question?.recordSeconds || 0) || 0),
+        audio_asset: normalizeAudioAsset(question?.audio_asset || question?.audioAsset),
+        order_index: Number(question?.order_index || question?.orderIndex || questionIndex) || questionIndex
+      }))
+    : []
 });
 
 const sanitizeRenderer = (renderer) => {
@@ -73,6 +121,22 @@ const sanitizeRenderer = (renderer) => {
       audio_url: typeof renderer.audio_url === "string" ? renderer.audio_url : "",
       prompt_file_url: typeof renderer.prompt_file_url === "string" ? renderer.prompt_file_url : "",
       instructions: typeof renderer.instructions === "string" ? renderer.instructions : ""
+    };
+  }
+
+  if (renderer.kind === TECAI_SPEAKING_KIND && Array.isArray(renderer.parts)) {
+    return {
+      kind: TECAI_SPEAKING_KIND,
+      timer_seconds:
+        Number(renderer.timer_seconds || renderer.timerSeconds || DEFAULT_TIMER_SECONDS) || DEFAULT_TIMER_SECONDS,
+      exam_type: typeof renderer.exam_type === "string" ? renderer.exam_type : "general",
+      instructions: typeof renderer.instructions === "string" ? renderer.instructions : "",
+      allow_rerecord: renderer.allow_rerecord !== false,
+      voice: renderer.voice && typeof renderer.voice === "object" ? renderer.voice : null,
+      instruction_audio_asset: normalizeAudioAsset(
+        renderer.instruction_audio_asset || renderer.instructionAudioAsset
+      ),
+      parts: renderer.parts.map(sanitizeSpeakingPart)
     };
   }
 
@@ -145,7 +209,7 @@ const getParagraphs = (xml) => {
 };
 
 const getRelationships = async (zip) => {
-  const relsFile = zip.file("word/_rels/document.xml.rels");
+  const relsFile = getZipFile(zip, "word/_rels/document.xml.rels");
   if (!relsFile) {
     return [];
   }
@@ -166,7 +230,7 @@ const getImageHtml = async (drawingNode, zip, relationships) => {
   const target = relationship.getAttribute("Target");
   if (!target) return "";
 
-  const imgFile = zip.file(`word/${target}`);
+  const imgFile = getZipFile(zip, `word/${target}`);
   if (!imgFile) return "";
 
   const base64 = await imgFile.async("base64");
@@ -219,7 +283,7 @@ const renderTable = async (tblNode, zip, state, relationships) => {
         const target = relationship.getAttribute("Target");
         if (!target) continue;
 
-        const imgFile = zip.file(`word/${target}`);
+        const imgFile = getZipFile(zip, `word/${target}`);
         if (!imgFile) continue;
 
         const base64 = await imgFile.async("base64");
@@ -287,13 +351,297 @@ const parseDocument = async (xml, zip) => {
   return content;
 };
 
+const normalizeSpeakingText = (value) => String(value || "").replace(/\s+/g, " ").trim();
+const isSpeakingTag = (value, tag) => new RegExp(`^\\[\\s*${tag}\\s*\\]$`, "i").test(value);
+const parseTimedTag = (value, tag) => {
+  const match = value.match(new RegExp(`^\\[\\s*${tag}\\s*:\\s*(\\d+)\\s*\\]$`, "i"));
+  return match ? Math.max(0, Number(match[1]) || 0) : null;
+};
+const parsePartTag = (value) => {
+  const match = value.match(/^\[\s*(PART[^\]]+)\s*\]$/i);
+  return match ? match[1].trim() : null;
+};
+
+const parseSpeakingParagraphs = (paragraphs, options = {}) => {
+  const startIndex = paragraphs.findIndex((row) => isSpeakingTag(row.text, "TECAI SPEAKING START"));
+  const endIndex = paragraphs.findIndex((row, index) => index > startIndex && isSpeakingTag(row.text, "TECAI SPEAKING END"));
+
+  if (startIndex === -1 || endIndex === -1) {
+    throw new AppError("The uploaded DOCX file does not contain a valid TECAI speaking block.", 400);
+  }
+
+  const lines = paragraphs
+    .slice(startIndex + 1, endIndex)
+    .map((row) => normalizeSpeakingText(row.text))
+    .filter(Boolean);
+
+  const parts = [];
+  const examInstructionLines = [];
+  let currentPart = null;
+  let lastQuestion = null;
+  let activeCollector = null;
+
+  const ensurePart = () => {
+    if (!currentPart) {
+      currentPart = {
+        part_id: `part-${parts.length + 1}`,
+        title: `Part ${parts.length + 1}`,
+        kind: "section",
+        instructions: "",
+        questions: []
+      };
+      parts.push(currentPart);
+    }
+    return currentPart;
+  };
+
+  const flushQuestion = () => {
+    if (!lastQuestion) return;
+    lastQuestion.prompt = normalizeSpeakingText(lastQuestion.prompt);
+    lastQuestion.instructions = normalizeSpeakingText(lastQuestion.instructions);
+  };
+
+  lines.forEach((line) => {
+    const partTitle = parsePartTag(line);
+    const prepSeconds = parseTimedTag(line, "PREP");
+    const recordSeconds = parseTimedTag(line, "RECORD");
+
+    if (isSpeakingTag(line, "INSTRUCTION")) {
+      activeCollector = "instruction";
+      return;
+    }
+
+    if (isSpeakingTag(line, "QUESTION")) {
+      const part = ensurePart();
+      lastQuestion = {
+        question_id: `${part.part_id}-question-${part.questions.length + 1}`,
+        prompt: "",
+        instructions: "",
+        prep_seconds: 0,
+        record_seconds: 0,
+        order_index: part.questions.length
+      };
+      part.questions.push(lastQuestion);
+      activeCollector = "question";
+      return;
+    }
+
+    if (partTitle) {
+      flushQuestion();
+      currentPart = {
+        part_id: `part-${parts.length + 1}`,
+        title: partTitle,
+        kind: "section",
+        instructions: "",
+        questions: []
+      };
+      parts.push(currentPart);
+      lastQuestion = null;
+      activeCollector = null;
+      return;
+    }
+
+    if (prepSeconds != null) {
+      ensurePart();
+      if (lastQuestion) {
+        lastQuestion.prep_seconds = prepSeconds;
+      }
+      activeCollector = null;
+      return;
+    }
+
+    if (recordSeconds != null) {
+      ensurePart();
+      if (lastQuestion) {
+        lastQuestion.record_seconds = recordSeconds;
+      }
+      activeCollector = null;
+      return;
+    }
+
+    if (activeCollector === "instruction") {
+      if (lastQuestion) {
+        lastQuestion.instructions = normalizeSpeakingText(`${lastQuestion.instructions} ${line}`);
+      } else if (currentPart) {
+        currentPart.instructions = normalizeSpeakingText(`${currentPart.instructions} ${line}`);
+      } else {
+        examInstructionLines.push(line);
+      }
+      return;
+    }
+
+    if (activeCollector === "question" && lastQuestion) {
+      lastQuestion.prompt = normalizeSpeakingText(`${lastQuestion.prompt} ${line}`);
+      return;
+    }
+
+    if (lastQuestion && !lastQuestion.prompt) {
+      lastQuestion.prompt = normalizeSpeakingText(`${lastQuestion.prompt} ${line}`);
+      return;
+    }
+
+    if (currentPart) {
+      currentPart.instructions = normalizeSpeakingText(`${currentPart.instructions} ${line}`);
+      return;
+    }
+
+    examInstructionLines.push(line);
+  });
+
+  flushQuestion();
+
+  if (!parts.length || !parts.some((part) => part.questions.length)) {
+    throw new AppError("At least one [QUESTION] block is required in the TECAI speaking document.", 400);
+  }
+
+  const totalTimerSeconds = parts.reduce(
+    (sum, part) =>
+      sum +
+      part.questions.reduce(
+        (partSum, question) => partSum + Number(question.prep_seconds || 0) + Number(question.record_seconds || 0),
+        0
+      ),
+    0
+  );
+
+  return {
+    exam_type: options.examType || "general",
+    instructions: normalizeSpeakingText(examInstructionLines.join("\n")),
+    allow_rerecord: options.allowRerecord !== false,
+    timer_seconds: totalTimerSeconds || DEFAULT_TIMER_SECONDS,
+    parts
+  };
+};
+
+const enrichSpeakingRendererWithAudio = async (renderer, options = {}) => {
+  const speakingRenderer = {
+    kind: TECAI_SPEAKING_KIND,
+    timer_seconds: renderer.timer_seconds,
+    exam_type: renderer.exam_type || "general",
+    instructions: renderer.instructions || "",
+    allow_rerecord: renderer.allow_rerecord !== false,
+    voice: {
+      provider: "elevenlabs",
+      voice_id: options.voiceId || null
+    },
+    instruction_audio_asset: null,
+    parts: []
+  };
+
+  if (renderer.instructions) {
+    speakingRenderer.instruction_audio_asset = await synthesizeSpeech({
+      text: renderer.instructions,
+      title: "Exam instructions",
+      segments: ["speaking", "instructions"],
+      meta: {
+        exam_type: renderer.exam_type || "general",
+        role: "instruction"
+      }
+    });
+  }
+
+  for (let partIndex = 0; partIndex < renderer.parts.length; partIndex += 1) {
+    const part = renderer.parts[partIndex];
+    const nextPart = {
+      part_id: part.part_id,
+      title: part.title,
+      kind: part.kind,
+      instructions: part.instructions || "",
+      instruction_audio_asset: null,
+      questions: []
+    };
+
+    if (part.instructions) {
+      nextPart.instruction_audio_asset = await synthesizeSpeech({
+        text: part.instructions,
+        title: `${part.title} instructions`,
+        segments: ["speaking", part.part_id, "instructions"],
+        meta: {
+          exam_type: renderer.exam_type || "general",
+          part_id: part.part_id,
+          role: "part_instruction"
+        }
+      });
+    }
+
+    for (let questionIndex = 0; questionIndex < part.questions.length; questionIndex += 1) {
+      const question = part.questions[questionIndex];
+      const promptAudio = await synthesizeSpeech({
+        text: question.prompt,
+        title: `${part.title} prompt`,
+        segments: ["speaking", part.part_id, question.question_id],
+        meta: {
+          exam_type: renderer.exam_type || "general",
+          part_id: part.part_id,
+          question_id: question.question_id,
+          role: "question"
+        }
+      });
+
+      nextPart.questions.push({
+        ...question,
+        audio_asset: promptAudio
+      });
+    }
+
+    speakingRenderer.parts.push(nextPart);
+  }
+
+  return speakingRenderer;
+};
+
+const buildSpeakingExamParts = (renderer) =>
+  renderer.parts.map((part, partIndex) => ({
+    partId: part.part_id,
+    title: part.title,
+    kind: "section",
+    instructions: part.instructions || "",
+    timerSeconds: part.questions.reduce(
+      (sum, question) => sum + Number(question.prep_seconds || 0) + Number(question.record_seconds || 0),
+      0
+    ),
+    passages: [],
+    audio: [],
+    images: [],
+    resources: [],
+    questions: part.questions.map((question, questionIndex) => ({
+      questionId: question.question_id,
+      type: "spoken",
+      prompt: question.prompt,
+      instructions: question.instructions || null,
+      options: [],
+      answerData: {
+        prep_seconds: question.prep_seconds,
+        record_seconds: question.record_seconds,
+        audio_asset: question.audio_asset || null
+      },
+      answerKey: null,
+      maxMarks: 0,
+      orderIndex: question.order_index ?? questionIndex
+    })),
+    audio: part.instruction_audio_asset ? [
+      {
+        assetId: part.instruction_audio_asset.asset_id,
+        type: "audio",
+        title: part.instruction_audio_asset.title || `${part.title} instructions`,
+        url: part.instruction_audio_asset.url || "",
+        storageKey: part.instruction_audio_asset.meta?.storage_key || null,
+        content: null,
+        mimeType: part.instruction_audio_asset.mime_type || "audio/mpeg",
+        meta: part.instruction_audio_asset.meta || null
+      }
+    ] : [],
+    answerData: null,
+    orderIndex: partIndex
+  }));
+
 const buildTecaiQuizFromDocx = async (file) => {
   if (!file?.buffer) {
     throw new AppError("Upload a DOCX file to generate the TECAI exam.", 400);
   }
 
   const zip = await JSZip.loadAsync(file.buffer);
-  const documentFile = zip.file("word/document.xml");
+  const documentFile = getZipFile(zip, "word/document.xml");
   if (!documentFile) {
     throw new AppError("The uploaded DOCX file is missing word/document.xml.", 400);
   }
@@ -319,7 +667,7 @@ const buildTecaiWritingQuizFromDocx = async (file) => {
   }
 
   const zip = await JSZip.loadAsync(file.buffer);
-  const documentFile = zip.file("word/document.xml");
+  const documentFile = getZipFile(zip, "word/document.xml");
   if (!documentFile) {
     throw new AppError("The uploaded DOCX file is missing word/document.xml.", 400);
   }
@@ -339,12 +687,45 @@ const buildTecaiWritingQuizFromDocx = async (file) => {
   };
 };
 
+const buildTecaiSpeakingQuizFromDocx = async (file, options = {}) => {
+  if (!file?.buffer) {
+    throw new AppError("Upload a DOCX file to generate the TECAI speaking exam.", 400);
+  }
+
+  const zip = await JSZip.loadAsync(file.buffer);
+  const documentFile = getZipFile(zip, "word/document.xml");
+  if (!documentFile) {
+    throw new AppError("The uploaded DOCX file is missing word/document.xml.", 400);
+  }
+
+  const xml = await documentFile.async("string");
+  const paragraphs = getParagraphs(xml);
+  const parsedRenderer = parseSpeakingParagraphs(paragraphs, options);
+  const renderer = await enrichSpeakingRendererWithAudio(parsedRenderer, options);
+
+  return {
+    mode: "written",
+    attemptLimit: Math.max(1, Number(options.attemptLimit || 1) || 1),
+    questions: [],
+    renderer,
+    examParts: buildSpeakingExamParts(renderer),
+    metadata: {
+      exam_type: renderer.exam_type,
+      allow_rerecord: renderer.allow_rerecord,
+      voice: renderer.voice,
+      instruction_audio_asset: renderer.instruction_audio_asset || null
+    }
+  };
+};
+
 module.exports = {
   TECAI_READING_KIND,
   TECAI_WRITING_KIND,
   TECAI_LISTENING_KIND,
+  TECAI_SPEAKING_KIND,
   DEFAULT_TIMER_SECONDS,
   buildTecaiQuizFromDocx,
   buildTecaiWritingQuizFromDocx,
+  buildTecaiSpeakingQuizFromDocx,
   sanitizeRenderer
 };

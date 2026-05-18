@@ -59,7 +59,6 @@ const register = async (payload) => {
 
   const { course, subcourse } = await validateCourseSelection(payload, defaultInstituteId);
   const emailOtp = generateOtp();
-  const mobileOtp = generateOtp();
   const passwordHash = await bcrypt.hash(payload.password, 12);
   const expiresAt = new Date(Date.now() + env.otpTtlMinutes * 60 * 1000);
 
@@ -75,9 +74,7 @@ const register = async (payload) => {
       courseId: course?._id || null,
       subcourseId: subcourse?._id || null,
       emailOtpHash: buildOtpHash(emailOtp),
-      mobileOtpHash: buildOtpHash(mobileOtp),
       emailVerifiedAt: null,
-      mobileVerifiedAt: null,
       expiresAt,
       lastSentAt: new Date()
     },
@@ -95,20 +92,13 @@ const register = async (payload) => {
     expires_at: expiresAt.toISOString()
   };
 
-  const [mailResult, smsResult] = await Promise.all([
-    sendMail({
-      to: normalizedEmail,
-      subject: "Your Institute LMS registration OTP",
-      text: `Use email OTP ${emailOtp} and mobile OTP ${mobileOtp} to complete registration. This code expires in ${env.otpTtlMinutes} minutes. Login URL: ${loginUrl}`,
-      html: `<p>Use <strong>${emailOtp}</strong> as your email OTP and <strong>${mobileOtp}</strong> as your mobile OTP.</p><p>This code expires in ${env.otpTtlMinutes} minutes.</p><p><a href="${loginUrl}">Open LMS</a></p>`,
-      metadata: { purpose: "registration-otp", verification_id: verificationContext.verification_id }
-    }),
-    sendSms({
-      to: payload.mob_no,
-      message: `Institute LMS OTP: ${mobileOtp}. Valid for ${env.otpTtlMinutes} minutes.`,
-      metadata: { purpose: "registration-otp", verification_id: verificationContext.verification_id }
-    })
-  ]);
+  const mailResult = await sendMail({
+    to: normalizedEmail,
+    subject: "Your Institute LMS registration OTP",
+    text: `Use email OTP ${emailOtp} to complete registration. This code expires in ${env.otpTtlMinutes} minutes. Login URL: ${loginUrl}`,
+    html: `<p>Use <strong>${emailOtp}</strong> as your email OTP.</p><p>This code expires in ${env.otpTtlMinutes} minutes.</p><p><a href="${loginUrl}">Open LMS</a></p>`,
+    metadata: { purpose: "registration-otp", verification_id: verificationContext.verification_id }
+  });
 
   return {
     ...verificationContext,
@@ -116,17 +106,15 @@ const register = async (payload) => {
     delivery: env.nodeEnv !== "production"
       ? {
           email_preview: mailResult.preview || null,
-          sms_preview: smsResult.preview || null,
-          email_otp: emailOtp,
-          mobile_otp: mobileOtp
+          email_otp: emailOtp
         }
       : undefined
   };
 };
 
-const verifyRegistration = async ({ verification_id, email_otp, mobile_otp }) => {
+const verifyRegistration = async ({ verification_id, email_otp }) => {
   const pending = await PendingRegistration.findById(verification_id).select(
-    "+passwordHash +emailOtpHash +mobileOtpHash"
+    "+passwordHash +emailOtpHash"
   );
   if (!pending) {
     throw new AppError("Verification session not found or expired.", 404);
@@ -137,9 +125,6 @@ const verifyRegistration = async ({ verification_id, email_otp, mobile_otp }) =>
   }
   if (buildOtpHash(email_otp) !== pending.emailOtpHash) {
     throw new AppError("Email OTP is incorrect.", 400);
-  }
-  if (buildOtpHash(mobile_otp) !== pending.mobileOtpHash) {
-    throw new AppError("Mobile OTP is incorrect.", 400);
   }
 
   const [existingEmailUser] = await Promise.all([

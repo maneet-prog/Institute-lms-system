@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+  xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"
+  xmlns:v="urn:schemas-microsoft-com:vml"
+  xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing"
+  xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+  xmlns:w10="urn:schemas-microsoft-com:office:word"
+  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"
+  xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"
+  xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk"
+  xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml"
+  xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+  mc:Ignorable="w14 wp14">
+  <w:body>
+    <w:p><w:r><w:t>TECAI Speaking Test Template</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[TECAI SPEAKING START]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[INSTRUCTION]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Welcome to the speaking examination.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>You will hear each prompt, prepare for the given time, and then record your answer.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[PART 1: Introduction &amp; Interview]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[QUESTION]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Could you introduce yourself and describe your hometown?</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[PREP: 5]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[RECORD: 30]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[QUESTION]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>What do you like most about your neighborhood, and why?</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[PREP: 5]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[RECORD: 30]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[PART 2: Cue Card Long Turn]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[INSTRUCTION]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>You should speak for one to two minutes on the following topic.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[QUESTION]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Describe a beautiful place you visited in your childhood.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>You should say:</w:t></w:r></w:p>
+    <w:p><w:r><w:t>where it was</w:t></w:r></w:p>
+    <w:p><w:r><w:t>when you went there</w:t></w:r></w:p>
+    <w:p><w:r><w:t>what you did there</w:t></w:r></w:p>
+    <w:p><w:r><w:t>and explain why you still remember it.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[PREP: 60]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[RECORD: 120]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[PART 3: Discussion]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[QUESTION]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Why do you think some childhood memories remain vivid for many years?</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[PREP: 10]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[RECORD: 45]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[QUESTION]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>How can travel experiences help children learn about the world?</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[PREP: 10]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[RECORD: 45]</w:t></w:r></w:p>
+    <w:p><w:r><w:t>[TECAI SPEAKING END]</w:t></w:r></w:p>
+    <w:sectPr>
+      <w:pgSz w:w="12240" w:h="15840"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>
+      <w:cols w:space="708"/>
+      <w:docGrid w:linePitch="360"/>
+    </w:sectPr>
+  </w:body>
+</w:document>

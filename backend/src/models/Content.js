@@ -61,7 +61,8 @@ const examPartQuestionSchema = new mongoose.Schema(
         "fill_blank",
         "matching",
         "short_answer",
-        "essay"
+        "essay",
+        "spoken"
       ],
       default: "written"
     },
@@ -114,6 +115,7 @@ const examProfileSchema = new mongoose.Schema(
         "tecai_reading",
         "tecai_writing",
         "tecai_listening",
+        "tecai_speaking",
         "structured_reading",
         "structured_writing",
         "custom"

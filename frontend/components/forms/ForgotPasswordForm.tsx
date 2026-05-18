@@ -31,11 +31,11 @@ export function ForgotPasswordForm() {
       {forgotPassword.isSuccess ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           <p>{forgotPassword.data.message}</p>
-          {forgotPassword.data.delivery?.temporary_password ? (
+          {/* {forgotPassword.data.delivery?.temporary_password ? (
             <p className="mt-2 text-xs text-emerald-700">
               Dev preview temporary password: {forgotPassword.data.delivery.temporary_password}
             </p>
-          ) : null}
+          ) : null} */}
         </div>
       ) : null}
       {errorMessage ? <p className="text-sm text-rose-600">{errorMessage}</p> : null}

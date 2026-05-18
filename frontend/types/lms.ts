@@ -159,7 +159,40 @@ export interface TecaiListeningRenderer {
   instructions?: string;
 }
 
-export type TecaiQuizRenderer = TecaiReadingRenderer | TecaiWritingRenderer | TecaiListeningRenderer;
+export interface TecaiSpeakingRenderer {
+  kind: "tecai_speaking";
+  timer_seconds: number;
+  exam_type?: string;
+  instructions?: string;
+  allow_rerecord?: boolean;
+  voice?: {
+    provider?: string | null;
+    voice_id?: string | null;
+  } | null;
+  instruction_audio_asset?: ExamAsset | null;
+  parts: Array<{
+    part_id: string;
+    title: string;
+    kind: string;
+    instructions?: string;
+    instruction_audio_asset?: ExamAsset | null;
+    questions: Array<{
+      question_id: string;
+      prompt: string;
+      instructions?: string;
+      prep_seconds: number;
+      record_seconds: number;
+      audio_asset?: ExamAsset | null;
+      order_index: number;
+    }>;
+  }>;
+}
+
+export type TecaiQuizRenderer =
+  | TecaiReadingRenderer
+  | TecaiWritingRenderer
+  | TecaiListeningRenderer
+  | TecaiSpeakingRenderer;
 
 export interface Content {
   content_id: string;
@@ -299,6 +332,12 @@ export interface StudentSubmission {
     response_url?: string | null;
     renderer_kind?: string | null;
     time_taken_seconds?: number;
+    transcript_text?: string | null;
+    ai_evaluation?: Record<string, unknown> | null;
+    fluency_score?: number | null;
+    grammar_score?: number | null;
+    pronunciation_score?: number | null;
+    vocabulary_score?: number | null;
     auto_score: number;
     awarded_marks?: number | null;
     max_score: number;
@@ -311,9 +350,18 @@ export interface StudentSubmission {
       part_id?: string | null;
       question_id?: string | null;
       response_text?: string | null;
+      response_url?: string | null;
+      storage_key?: string | null;
       response_data?: Record<string, unknown> | null;
       word_count: number;
       duration_seconds: number;
+      transcript?: string | null;
+      evaluation?: Record<string, unknown> | null;
+      score?: number | null;
+      fluency_score?: number | null;
+      grammar_score?: number | null;
+      pronunciation_score?: number | null;
+      vocabulary_score?: number | null;
     }>;
     answers: Array<{
       question_id: string;
@@ -600,4 +648,12 @@ export interface UserDetailsResponse {
 
 export interface MessageResponse {
   message: string;
+}
+
+export interface SpeakingAudioUploadResponse {
+  audio_url: string;
+  storage_key: string;
+  mime_type: string;
+  original_name: string;
+  size_bytes: number;
 }

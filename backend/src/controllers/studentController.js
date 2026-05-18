@@ -19,3 +19,11 @@ exports.batchWorkspace = asyncHandler(async (req, res) =>
 exports.submitContent = asyncHandler(async (req, res) =>
   res.status(201).json(await service.submitContent(req.body, req.user, req.tenant))
 );
+exports.uploadSpeakingAudio = asyncHandler(async (req, res) =>
+  res.status(201).json(await service.uploadSpeakingResponseAudio({
+    file: req.file,
+    user: req.user,
+    tenant: req.tenant,
+    contentId: req.body.content_id
+  }))
+);

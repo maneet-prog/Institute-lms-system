@@ -13,6 +13,7 @@ import {
 import { useAuthStore } from "@/store/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { PhoneInput } from "@/components/ui/PhoneInput";
 import { Select } from "@/components/ui/Select";
 
 interface Props {
@@ -126,7 +127,7 @@ export function UserCreateForm({
       <Input label="First Name" required value={form.first_name} onChange={(e) => setForm((prev) => ({ ...prev, first_name: e.target.value }))} />
       <Input label="Last Name" required value={form.last_name} onChange={(e) => setForm((prev) => ({ ...prev, last_name: e.target.value }))} />
       <Input label="Email" type="email" required value={form.email} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} />
-      <Input label="Mobile" required value={form.mob_no} onChange={(e) => setForm((prev) => ({ ...prev, mob_no: e.target.value }))} />
+      <PhoneInput label="Mobile" required value={form.mob_no} onChange={(value) => setForm((prev) => ({ ...prev, mob_no: value }))} />
       <Input label="Password" type="password" required value={form.password} onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))} />
       <Select
         label="Role"

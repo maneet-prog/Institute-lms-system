@@ -31,9 +31,23 @@ module.exports = {
     apiKey: process.env.MAIL_API_KEY || "",
     from: process.env.MAIL_FROM || "noreply@institutelms.local"
   },
+  nodemailer: {
+    user: process.env.EMAIL_USER || "",
+    appPassword: process.env.EMAIL_APP_PASSWORD || ""
+  },
   sms: {
     apiUrl: process.env.SMS_API_URL || "",
     apiKey: process.env.SMS_API_KEY || "",
     senderId: process.env.SMS_SENDER_ID || "LMSOTP"
+  },
+  elevenlabs: {
+    apiKey: process.env.ELEVENLABS_API_KEY || "",
+    voiceId: process.env.ELEVENLABS_VOICE_ID || "",
+    modelId: process.env.ELEVENLABS_MODEL_ID || "eleven_multilingual_v2"
+  },
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY || "",
+    speechToTextModel: process.env.OPENAI_SPEECH_TO_TEXT_MODEL || "gpt-4o-mini-transcribe",
+    evaluationModel: process.env.OPENAI_EVALUATION_MODEL || "gpt-4.1-mini"
   }
 };

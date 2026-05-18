@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { PhoneInput } from "@/components/ui/PhoneInput";
 import { Select } from "@/components/ui/Select";
 import { useRegister, useVerifyRegistration } from "@/hooks/useAuth";
 import { usePublicCoursesQuery, usePublicSubCoursesQuery } from "@/hooks/useLmsQueries";
@@ -28,10 +29,8 @@ export function RegisterForm() {
   const [verificationId, setVerificationId] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [emailOtp, setEmailOtp] = useState("");
-  const [mobileOtp, setMobileOtp] = useState("");
   const [deliveryPreview, setDeliveryPreview] = useState<{
     email_otp?: string;
-    mobile_otp?: string;
   } | null>(null);
   const { data: subCourses = [] } = usePublicSubCoursesQuery(courseId);
 
@@ -96,8 +95,7 @@ export function RegisterForm() {
     event.preventDefault();
     verifyRegistration.mutate({
       verification_id: verificationId,
-      email_otp: emailOtp,
-      mobile_otp: mobileOtp
+      email_otp: emailOtp
     });
   };
 
@@ -119,13 +117,13 @@ export function RegisterForm() {
       <form className="space-y-4" onSubmit={onSubmitVerification}>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
           <p className="font-semibold text-slate-900">OTP verification in progress</p>
-          <p className="mt-2">We sent one OTP to your email and one OTP to your mobile number.</p>
+          <p className="mt-2">We sent an OTP to your email address.</p>
           <p className="mt-1">Expires at: {new Date(expiresAt).toLocaleString("en-IN")}</p>
-          {deliveryPreview?.email_otp || deliveryPreview?.mobile_otp ? (
+          {/* {deliveryPreview?.email_otp ? (
             <p className="mt-2 text-xs text-brand-700">
-              Dev preview: email OTP {deliveryPreview.email_otp || "-"}, mobile OTP {deliveryPreview.mobile_otp || "-"}
+              Dev preview: email OTP {deliveryPreview.email_otp || "-"}
             </p>
-          ) : null}
+          ) : null} */}
         </div>
         <Input
           label="Email OTP"
@@ -134,14 +132,6 @@ export function RegisterForm() {
           maxLength={6}
           value={emailOtp}
           onChange={(e) => setEmailOtp(e.target.value)}
-        />
-        <Input
-          label="Mobile OTP"
-          required
-          minLength={6}
-          maxLength={6}
-          value={mobileOtp}
-          onChange={(e) => setMobileOtp(e.target.value)}
         />
         <div className="flex gap-3">
           <Button type="submit" disabled={verifyRegistration.isPending}>
@@ -154,7 +144,6 @@ export function RegisterForm() {
               setVerificationId("");
               setExpiresAt("");
               setEmailOtp("");
-              setMobileOtp("");
             }}
           >
             Edit Registration
@@ -172,7 +161,7 @@ export function RegisterForm() {
         <Input label="Last Name" required value={lastName} onChange={(e) => setLastName(e.target.value)} />
       </div>
       <Input label="Email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-      <Input label="Mobile" required value={mobNo} onChange={(e) => setMobNo(e.target.value)} />
+      <PhoneInput label="Mobile" required value={mobNo} onChange={(value) => setMobNo(value)} />
       <Input
         label="Password"
         type="password"

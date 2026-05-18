@@ -48,6 +48,7 @@ import {
   getStudentDashboard,
   getStudentModules,
   submitStudentContentResponse,
+  uploadSpeakingSubmissionAudio,
   updateStudentContentAccess,
   updateContent,
   updateReusableContent,
@@ -626,6 +627,15 @@ export function useSubmitStudentContentMutation() {
       queryClient.invalidateQueries({ queryKey: ["tecai-exam"] });
       queryClient.invalidateQueries({ queryKey: ["course-module-exam"] });
       pushToast("Response submitted successfully.", "success");
+    }
+  });
+}
+
+export function useUploadSpeakingSubmissionAudioMutation() {
+  return useMutation({
+    mutationFn: uploadSpeakingSubmissionAudio,
+    onSuccess: () => {
+      pushToast("Recording uploaded successfully.", "success");
     }
   });
 }

@@ -39,7 +39,7 @@ export default function CourseWiseExamPage() {
       submission={data.submission}
       studentName={data.student_name}
       autoStart={autoStart}
-      allowSave={Object.prototype.hasOwnProperty.call(data, "submission")}
+      allowSave={data.submission !== undefined}
       examContext={{
         course: data.course,
         exam_type: data.exam_type,

@@ -2,12 +2,14 @@ const AppError = require("./AppError");
 
 const DEFAULT_TIMER_SECONDS = 3600;
 const TECAI_LISTENING_KIND = "tecai_listening";
+const TECAI_SPEAKING_KIND = "tecai_speaking";
 const ensureArray = (value) => (Array.isArray(value) ? value : []);
 const isTecaiRenderer = (renderer) =>
   (renderer?.kind === "tecai_reading" && Array.isArray(renderer.paragraphs)) ||
   (renderer?.kind === "tecai_writing" &&
     (Array.isArray(renderer.parts) || Array.isArray(renderer.blocks))) ||
-  renderer?.kind === TECAI_LISTENING_KIND;
+  renderer?.kind === TECAI_LISTENING_KIND ||
+  (renderer?.kind === TECAI_SPEAKING_KIND && Array.isArray(renderer.parts));
 
 const normalizeQuestion = (question, index) => {
   const questionId = String(
@@ -90,7 +92,8 @@ const resolveQuizFromContent = (content) => {
   if (
     content?.profile?.exam?.rendererKind === "tecai_reading" ||
     content?.profile?.exam?.rendererKind === "tecai_writing" ||
-    content?.profile?.exam?.rendererKind === TECAI_LISTENING_KIND
+    content?.profile?.exam?.rendererKind === TECAI_LISTENING_KIND ||
+    content?.profile?.exam?.rendererKind === TECAI_SPEAKING_KIND
   ) {
     const rendererKind = content.profile.exam.rendererKind;
     const timerSeconds =
@@ -114,6 +117,19 @@ const resolveQuizFromContent = (content) => {
           audio_url: String(content.externalUrl || ""),
           prompt_file_url: String(content.fileUrl || ""),
           instructions: String(content.profile?.instructions || "")
+        }
+      };
+    }
+    if (rendererKind === TECAI_SPEAKING_KIND) {
+      return {
+        mode: "written",
+        attemptLimit: Math.max(1, Number(content?.profile?.quiz?.attemptLimit || 999) || 999),
+        questions: [],
+        renderer: content.profile?.quiz?.renderer || {
+          kind: TECAI_SPEAKING_KIND,
+          timer_seconds: timerSeconds,
+          instructions: String(content.profile?.instructions || ""),
+          parts: []
         }
       };
     }

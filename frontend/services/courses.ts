@@ -9,6 +9,7 @@ import {
   StudentBatchInfo,
   StudentBatchWorkspace,
   StudentModuleBundle,
+  SpeakingAudioUploadResponse,
   StudentSubmission,
   SubCourse,
   TecaiExamData
@@ -508,5 +509,16 @@ export async function submitStudentContentResponse(payload: {
   }>;
 }): Promise<StudentSubmission> {
   const { data } = await api.post<StudentSubmission>("/students/content-submissions", payload);
+  return data;
+}
+
+export async function uploadSpeakingSubmissionAudio(payload: {
+  content_id: string;
+  audio: File;
+}): Promise<SpeakingAudioUploadResponse> {
+  const formData = new FormData();
+  formData.append("content_id", payload.content_id);
+  formData.append("audio", payload.audio);
+  const { data } = await api.post<SpeakingAudioUploadResponse>("/students/content-submissions/audio-upload", formData);
   return data;
 }

@@ -16,9 +16,7 @@ const pendingRegistrationSchema = new mongoose.Schema(
     courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", default: null },
     subcourseId: { type: mongoose.Schema.Types.ObjectId, ref: "Subcourse", default: null },
     emailOtpHash: { type: String, required: true, select: false },
-    mobileOtpHash: { type: String, required: true, select: false },
     emailVerifiedAt: { type: Date, default: null },
-    mobileVerifiedAt: { type: Date, default: null },
     expiresAt: { type: Date, required: true },
     lastSentAt: { type: Date, default: Date.now }
   },

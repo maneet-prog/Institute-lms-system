@@ -43,6 +43,8 @@ exports.studentSubmissionSchema = Joi.object({
         part_id: Joi.string().allow("", null),
         question_id: Joi.string().allow("", null),
         response_text: Joi.string().allow("", null),
+        response_url: Joi.string().allow("", null),
+        storage_key: Joi.string().allow("", null),
         response_data: Joi.object().unknown(true).allow(null),
         word_count: Joi.number().integer().min(0).allow(null),
         duration_seconds: Joi.number().integer().min(0).allow(null)

@@ -14,6 +14,10 @@ function formatScore(value: number | null | undefined, maxScore: number) {
   return maxScore > 0 ? `${value ?? 0}/${maxScore}` : String(value ?? 0);
 }
 
+function formatMetric(value: number | null | undefined) {
+  return value == null ? "N/A" : String(value);
+}
+
 interface Props {
   badge: string;
   title: string;
@@ -185,6 +189,84 @@ export function SubmissionReviewWorkspace({ badge, title, description }: Props) 
                         <a href={latestAttempt.response_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-brand-700 hover:underline">
                           Open submitted file / media
                         </a>
+                      ) : null}
+                      {latestAttempt?.exam_responses?.length ? (
+                        <div className="space-y-3">
+                          {latestAttempt.exam_responses.map((response, index) => (
+                            <div key={`${response.question_id || response.part_id || "response"}-${index}`} className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <p className="font-medium text-slate-900">
+                                  {response.question_id || response.part_id || `Response ${index + 1}`}
+                                </p>
+                                {response.score != null ? (
+                                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                                    AI score {response.score}
+                                  </span>
+                                ) : null}
+                              </div>
+                              {(response.response_data?.prompt as string | undefined) ? (
+                                <p className="mt-2 text-sm text-slate-600">{String(response.response_data?.prompt)}</p>
+                              ) : null}
+                              {response.response_url ? (
+                                <audio controls className="mt-3 w-full">
+                                  <source src={response.response_url} />
+                                </audio>
+                              ) : null}
+                              {response.transcript ? (
+                                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Transcript</p>
+                                  <p className="mt-2 whitespace-pre-wrap">{response.transcript}</p>
+                                </div>
+                              ) : null}
+                              {response.evaluation ? (
+                                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Rubric Scores</p>
+                                    <div className="mt-2 space-y-1 text-sm text-slate-700">
+                                      <p>Fluency: {formatMetric(response.fluency_score)}</p>
+                                      <p>Grammar: {formatMetric(response.grammar_score)}</p>
+                                      <p>Pronunciation: {formatMetric(response.pronunciation_score)}</p>
+                                      <p>Vocabulary: {formatMetric(response.vocabulary_score)}</p>
+                                    </div>
+                                  </div>
+                                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">AI Feedback</p>
+                                    <p className="mt-2 whitespace-pre-wrap">
+                                      {typeof response.evaluation.feedback === "string"
+                                        ? response.evaluation.feedback
+                                        : "No AI feedback available."}
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {latestAttempt?.ai_evaluation ? (
+                        <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
+                          <p className="font-semibold">AI Evaluation Summary</p>
+                          <div className="mt-2 grid gap-2 md:grid-cols-2">
+                            <p>Overall: {formatMetric(latestAttempt.ai_evaluation.overall_score as number | null | undefined)}</p>
+                            <p>Scale: {formatMetric(latestAttempt.ai_evaluation.scale_max as number | null | undefined)}</p>
+                            <p>Fluency: {formatMetric(latestAttempt.fluency_score)}</p>
+                            <p>Grammar: {formatMetric(latestAttempt.grammar_score)}</p>
+                            <p>Pronunciation: {formatMetric(latestAttempt.pronunciation_score)}</p>
+                            <p>Vocabulary: {formatMetric(latestAttempt.vocabulary_score)}</p>
+                          </div>
+                          {latestAttempt.transcript_text ? (
+                            <div className="mt-3 rounded-lg border border-sky-200 bg-white p-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Combined Transcript</p>
+                              <p className="mt-2 whitespace-pre-wrap text-slate-700">{latestAttempt.transcript_text}</p>
+                            </div>
+                          ) : null}
+                          {typeof latestAttempt.ai_evaluation.feedback === "string" && latestAttempt.ai_evaluation.feedback ? (
+                            <div className="mt-3 rounded-lg border border-sky-200 bg-white p-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Summary Feedback</p>
+                              <p className="mt-2 whitespace-pre-wrap text-slate-700">{latestAttempt.ai_evaluation.feedback}</p>
+                            </div>
+                          ) : null}
+                        </div>
                       ) : null}
                       {latestAttempt?.answers?.length ? (
                         <div className="space-y-2">

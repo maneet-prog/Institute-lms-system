@@ -21,9 +21,18 @@ const examResponseSchema = new mongoose.Schema(
     partId: { type: String, default: null },
     questionId: { type: String, default: null },
     responseText: { type: String, default: null },
+    responseUrl: { type: String, default: null },
+    storageKey: { type: String, default: null },
     responseData: { type: mongoose.Schema.Types.Mixed, default: null },
     wordCount: { type: Number, default: 0 },
-    durationSeconds: { type: Number, default: 0 }
+    durationSeconds: { type: Number, default: 0 },
+    transcript: { type: String, default: null },
+    evaluation: { type: mongoose.Schema.Types.Mixed, default: null },
+    score: { type: Number, default: null },
+    fluencyScore: { type: Number, default: null },
+    grammarScore: { type: Number, default: null },
+    pronunciationScore: { type: Number, default: null },
+    vocabularyScore: { type: Number, default: null }
   },
   { _id: false }
 );
@@ -38,6 +47,12 @@ const submissionAttemptSchema = new mongoose.Schema(
     examResponses: { type: [examResponseSchema], default: [] },
     rendererKind: { type: String, default: null },
     timeTakenSeconds: { type: Number, default: 0 },
+    transcriptText: { type: String, default: null },
+    aiEvaluation: { type: mongoose.Schema.Types.Mixed, default: null },
+    fluencyScore: { type: Number, default: null },
+    grammarScore: { type: Number, default: null },
+    pronunciationScore: { type: Number, default: null },
+    vocabularyScore: { type: Number, default: null },
     autoScore: { type: Number, default: 0 },
     awardedMarks: { type: Number, default: null },
     maxScore: { type: Number, default: 0 },
